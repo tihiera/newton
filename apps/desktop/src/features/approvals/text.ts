@@ -126,6 +126,13 @@ export function destinationFacts(target: unknown, destination: unknown): Destina
 }
 
 /** The experiment an approval is about (to open it), or null for anything else. */
-export function approvalExperimentId(a: { subject_type: string; subject_id: string }): string | null {
-  return a.subject_type === "experiment" && a.subject_id ? a.subject_id : null;
+export function approvalExperimentId(a: {
+  subject_type: string;
+  subject_id: string;
+  details?: Record<string, unknown> | null;
+}): string | null {
+  if (a.subject_type === "experiment" && a.subject_id) return a.subject_id;
+  // A publication's approval names the experiment whose report it sends.
+  const exp = a.details?.experiment_id;
+  return typeof exp === "string" && exp ? exp : null;
 }

@@ -11,6 +11,7 @@ import { when } from "../../components/time";
 import { useAction } from "../../hooks/useAction";
 import { usePolling } from "../../hooks/usePolling";
 import { PublicationsList } from "../publishing/PublicationsList";
+import { PublishedLinks } from "../publishing/PublishedLink";
 import { PublishDialog } from "../publishing/PublishDialog";
 import { AwaitingCard } from "./AwaitingCard";
 import { JobsList } from "./JobsList";
@@ -69,6 +70,7 @@ function ExperimentBody({ exp, refresh, next }: { exp: Experiment; refresh: () =
               View report
             </button>
           ) : null}
+          {reported ? <PublishedLinks experimentId={exp.id} /> : null}
           {reported ? (
             <button className="btn primary" onClick={() => setOverlay("publish")}>
               <Icon name="share" size={18} />

@@ -47,5 +47,8 @@ describe("approvalExperimentId", () => {
     expect(approvalExperimentId({ subject_type: "experiment", subject_id: "exp-1" })).toBe("exp-1");
     expect(approvalExperimentId({ subject_type: "publication", subject_id: "pub-1" })).toBeNull();
     expect(approvalExperimentId({ subject_type: "experiment", subject_id: "" })).toBeNull();
+    // A publication's approval: the experiment whose report it sends.
+    const pub = { subject_type: "publication", subject_id: "pub-1", details: { experiment_id: "exp-2" } };
+    expect(approvalExperimentId(pub)).toBe("exp-2");
   });
 });

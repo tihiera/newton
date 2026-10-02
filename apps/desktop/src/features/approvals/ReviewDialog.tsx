@@ -9,6 +9,7 @@ import { usePolling } from "../../hooks/usePolling";
 import { ApprovalActions } from "./ApprovalActions";
 import { ApprovalDetails, ApprovalFootnote } from "./ApprovalDetails";
 import { DecisionLine } from "./DecisionLine";
+import { PublicationOutcome } from "../publishing/PublishedLink";
 import { approvalExperimentId, kindText } from "./text";
 import "./approvals.css";
 
@@ -65,6 +66,9 @@ export function ReviewDialog({ approvalId, onClose }: { approvalId: string; onCl
             </div>
             <ApprovalDetails approval={approval} />
             {approval.status !== "pending" ? <DecisionLine approval={approval} /> : null}
+            {approval.status === "approved" && approval.kind === "publish_report" && experimentId ? (
+              <PublicationOutcome experimentId={experimentId} publicationId={approval.subject_id} />
+            ) : null}
           </>
         )}
       </div>

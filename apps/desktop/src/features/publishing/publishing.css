@@ -147,3 +147,22 @@
 .pub-switch:hover {
   color: var(--ink-2);
 }
+
+/* An approved publication: sending, then the link to it. */
+.pub-outcome {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--green-soft);
+  color: var(--green);
+}
+.pub-outcome.muted {
+  background: var(--surface-sunken);
+  color: var(--muted);
+}
+.pub-outcome .btn {
+  margin-left: auto;
+}
