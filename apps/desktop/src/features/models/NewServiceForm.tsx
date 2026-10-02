@@ -7,7 +7,7 @@ import { useNav } from "../../app/navigation";
 import { useAction } from "../../hooks/useAction";
 import { Icon } from "../../components/Icon";
 import { ErrorNote, Field, fieldError, Note, Spinner } from "../../components/ui";
-import { serviceName, type ModelPick } from "./choices";
+import { memoryFor, serviceName, type ModelPick } from "./choices";
 import { ModelChoices } from "./ModelChoices";
 
 const ENGINES = ["ollama", "vllm", "mlx", "fake"] as const;
@@ -19,6 +19,8 @@ interface Form {
   model: string;
   revision: string;
   memory_gb: string;
+  /** The picked model's own memory hint: memory_gb grows from it with the context. */
+  base_memory: number | null;
   context_length: string;
   parallel: string;
 }
@@ -30,9 +32,13 @@ const EMPTY: Form = {
   model: "",
   revision: "",
   memory_gb: "",
-  context_length: "",
+  base_memory: null,
+  context_length: "8192",
   parallel: "",
 };
+
+/** How much text the model reads at once (tokens). 8k is the services' default. */
+const CONTEXTS = [4096, 8192, 16384, 32768, 65536, 131072];
 
 const numberOrUndefined = (s: string) => (s.trim() === "" ? undefined : Number(s));
 
@@ -55,15 +61,24 @@ export function NewServiceForm({
   // Until the user picks one: the first SSH machine (a GPU box), else the first machine.
   const hostId = form.host_id || (hosts?.find((h) => h.kind === "ssh")?.id ?? hosts?.[0]?.id ?? "");
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const memoryOf = (f: Form, base: number | null) =>
+    base === null ? f.memory_gb : String(memoryFor(base, Number(f.context_length) || 8192, Number(f.parallel) || 1));
   const pick = (p: ModelPick) =>
     setForm((f) => ({
       ...f,
       engine: p.engine,
       model: p.model,
       revision: p.revision,
-      memory_gb: String(p.memory_gb),
+      base_memory: p.memory_gb,
+      memory_gb: memoryOf(f, p.memory_gb),
       name: f.name || serviceName(p.model),
     }));
+  // Context and parallel requests change the memory the service needs.
+  const setSized = (k: "context_length" | "parallel") => (e: { target: { value: string } }) =>
+    setForm((f) => {
+      const next = { ...f, [k]: e.target.value };
+      return { ...next, memory_gb: memoryOf(next, f.base_memory) };
+    });
   const hostName = hosts?.find((h) => h.id === hostId)?.name ?? "this machine";
 
   const create = useAction(async () => {
@@ -176,6 +191,21 @@ export function NewServiceForm({
           autoPick={initialModel}
         />
       </Field>
+      <Field
+        label="Context"
+        error={fe("context_length")}
+        hint={`How much of a paper the model reads at once. Longer needs more memory${
+          form.memory_gb ? `: ${form.memory_gb} GB` : ""
+        }.`}
+      >
+        <select className="select" value={form.context_length} onChange={setSized("context_length")}>
+          {CONTEXTS.map((c) => (
+            <option key={c} value={String(c)}>
+              {c / 1024}k tokens{c === 8192 ? " (default)" : ""}
+            </option>
+          ))}
+        </select>
+      </Field>
 
       <details className="new-service-advanced" open={advancedError || undefined}>
         <summary className="small muted">Advanced</summary>
@@ -226,22 +256,13 @@ export function NewServiceForm({
               onChange={set("memory_gb")}
             />
           </Field>
-          <Field label="Context length" error={fe("context_length")}>
-            <input
-              className={`input ${fe("context_length") ? "invalid" : ""}`}
-              type="number"
-              min={0}
-              value={form.context_length}
-              onChange={set("context_length")}
-            />
-          </Field>
           <Field label="Parallel requests" error={fe("parallel")}>
             <input
               className={`input ${fe("parallel") ? "invalid" : ""}`}
               type="number"
               min={1}
               value={form.parallel}
-              onChange={set("parallel")}
+              onChange={setSized("parallel")}
             />
           </Field>
         </div>

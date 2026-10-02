@@ -21,6 +21,15 @@ export function catalogNotOnMachine(catalog: CatalogModel[], onMachine: MachineM
   return catalog.filter((c) => !onMachine.some((m) => m.model === c.model && m.revision === c.revision));
 }
 
+/** Memory for a model at a context: its hint covers 8k for one request; the attention
+ *  cache grows with every token of every parallel request (about 6 GB per 32k for a
+ *  14B model, at least 4 GB). agentd and the worker still check that it fits. */
+export function memoryFor(base: number, context: number, parallel: number): number {
+  const tokens = context * Math.max(1, parallel);
+  if (tokens <= 8192) return base;
+  return base + Math.ceil(((tokens - 8192) / 32768) * Math.max(4, base * 0.5));
+}
+
 /** A service name from a model: "llama3.2:3b" -> "llama3-2-3b". */
 export function serviceName(model: string): string {
   const base = model.replace(/^mlx-community\//, "").replace(/:latest$/, "");
