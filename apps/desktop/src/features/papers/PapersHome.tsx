@@ -1,5 +1,5 @@
-// The library when no paper is selected: what Newton has read, by state, the most
-// recent cards, experiments made from built-in schemes, and what this Mac can do
+// The library when no paper is selected: what Newton has read, by state, experiments
+// made from built-in schemes, and what this Mac can do
 // (agentd's readiness checklist; the welcome card while there is no research yet).
 
 import { useMemo } from "react";
@@ -14,11 +14,10 @@ import { paperlessExperiments } from "../experiments/library";
 import { variantsLine } from "../goals/timeline";
 import { ReadinessCard } from "../readiness/ReadinessCard";
 import { isFirstRun } from "../readiness/readiness";
-import { countByState, paperMeta, paperTitle } from "./format";
+import { countByState } from "./format";
 import "../experiments/experiments.css";
 import "./papers.css";
 
-const RECENT = 8;
 const PAPERLESS = 6;
 
 function PaperlessExperiments({ list }: { list: Experiment[] }) {
@@ -53,7 +52,6 @@ export function PapersHome() {
   const goals = useGoals();
   const experiments = useExperiments();
   const items = papers.data ?? [];
-  const recent = [...items].sort((a, b) => b.updated_at - a.updated_at).slice(0, RECENT);
   const paperless = useMemo(() => paperlessExperiments(experiments.data ?? []).slice(0, PAPERLESS), [experiments.data]);
   const firstRun = isFirstRun(goals.data, papers.data);
   const addPaper = () => nav.open({ kind: "ingest", goalId: null });
@@ -105,45 +103,25 @@ export function PapersHome() {
             </div>
           </Empty>
         ) : items.length ? (
-          <>
-            <div className="grid-tiles">
-              <div className="card soft metric">
+          <div className="grid-tiles">
+            <div className="card soft metric">
+              <div className="metric-label">
+                <Icon name="paper" size={17} />
+                All papers
+              </div>
+              <div className="metric-value">{items.length}</div>
+            </div>
+            {countByState(items).map(([state, n]) => (
+              <div className="card soft metric" key={state}>
                 <div className="metric-label">
-                  <Icon name="paper" size={17} />
-                  All papers
+                  <StateChip kind="paper" state={state} />
                 </div>
-                <div className="metric-value">{items.length}</div>
-              </div>
-              {countByState(items).map(([state, n]) => (
-                <div className="card soft metric" key={state}>
-                  <div className="metric-label">
-                    <StateChip kind="paper" state={state} />
-                  </div>
-                  <div className="metric-value" aria-label={`${stateLabel("paper", state)[0]}: ${n}`}>
-                    {n}
-                  </div>
+                <div className="metric-value" aria-label={`${stateLabel("paper", state)[0]}: ${n}`}>
+                  {n}
                 </div>
-              ))}
-            </div>
-
-            <div>
-              <h2 className="h-section" style={{ marginBottom: 14 }}>
-                Recent
-              </h2>
-              <div className="home-list">
-                {recent.map((it) => (
-                  <button key={it.id} className="card home-card" onClick={() => nav.selectPaper(it.id)}>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="paper-row-title">{paperTitle(it)}</div>
-                      <div className="paper-row-meta">{paperMeta(it)}</div>
-                      <StateChip kind="paper" state={it.state} />
-                      {it.data.card?.summary ? <div className="home-card-summary">{it.data.card.summary}</div> : null}
-                    </div>
-                  </button>
-                ))}
               </div>
-            </div>
-          </>
+            ))}
+          </div>
         ) : null}
 
         <PaperlessExperiments list={paperless} />

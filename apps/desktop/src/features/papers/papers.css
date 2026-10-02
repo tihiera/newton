@@ -174,33 +174,3 @@
 }
 
 /* library home */
-.home-card {
-  display: block;
-  text-align: left;
-  cursor: pointer;
-  width: 100%;
-  font: inherit;
-  transition: box-shadow 0.15s;
-}
-.home-card:hover {
-  box-shadow: var(--shadow);
-}
-.home-card .thumb {
-  width: 72px;
-  height: 72px;
-  border-radius: 14px;
-}
-.home-card-summary {
-  color: var(--muted);
-  font-size: 13.5px;
-  margin-top: 6px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.home-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 14px;
-}

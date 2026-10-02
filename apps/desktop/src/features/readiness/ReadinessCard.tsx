@@ -2,6 +2,7 @@
 // title, sentence and action. The actions open the drawers or the built-in experiment
 // dialog.
 
+import { useState } from "react";
 import type { ReadinessItem } from "../../api";
 import { useReadiness } from "../../app/data";
 import { useNav } from "../../app/navigation";
@@ -9,6 +10,23 @@ import { Icon } from "../../components/Icon";
 import { ErrorNote, Spinner } from "../../components/ui";
 import { actionTarget, readinessLine, stateLook } from "./readiness";
 import "./readiness.css";
+
+// Open or closed, remembered on this machine (a per-viewer convenience; closed by default).
+const OPEN_KEY = "newton.readiness.open";
+function readOpen(): boolean {
+  try {
+    return localStorage.getItem(OPEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function saveOpen(open: boolean): void {
+  try {
+    localStorage.setItem(OPEN_KEY, open ? "1" : "0");
+  } catch {
+    // storage unavailable: it just isn't remembered
+  }
+}
 
 function Row({ item, onAction }: { item: ReadinessItem; onAction: () => void }) {
   const look = stateLook(item.state);
@@ -35,6 +53,11 @@ function Row({ item, onAction }: { item: ReadinessItem; onAction: () => void }) 
 /** `firstRun`: the welcome card shown while there is no research yet. */
 export function ReadinessCard({ firstRun = false, goalId = null }: { firstRun?: boolean; goalId?: string | null }) {
   const nav = useNav();
+  const [open, setOpen] = useState(() => firstRun || readOpen());
+  const toggle = () => {
+    setOpen(!open);
+    saveOpen(!open);
+  };
   const readiness = useReadiness();
   const items = readiness.data?.items ?? [];
 
@@ -45,7 +68,14 @@ export function ReadinessCard({ firstRun = false, goalId = null }: { firstRun?: 
 
   return (
     <section className={`card ready-card ${firstRun ? "mesh-card first-run" : ""}`}>
-      <div className="card-head">
+      <div
+        className={`card-head ${firstRun ? "" : "ready-toggle"}`}
+        onClick={firstRun ? undefined : toggle}
+        role={firstRun ? undefined : "button"}
+        aria-expanded={firstRun ? undefined : open}
+        tabIndex={firstRun ? undefined : 0}
+        onKeyDown={firstRun ? undefined : (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), toggle())}
+      >
         <span className="icon-tile">
           <Icon name="laptop" />
         </span>
@@ -58,19 +88,28 @@ export function ReadinessCard({ firstRun = false, goalId = null }: { firstRun?: 
           </div>
         </div>
         {firstRun ? null : (
-          <button className="btn" onClick={() => nav.open({ kind: "new-experiment", goalId })}>
-            <Icon name="flask" size={16} />
-            New experiment
-          </button>
+          <>
+            <button
+              className="btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                nav.open({ kind: "new-experiment", goalId });
+              }}
+            >
+              <Icon name="flask" size={16} />
+              New experiment
+            </button>
+            <Icon name={open ? "chevronUp" : "chevronDown"} size={18} />
+          </>
         )}
       </div>
-      {readiness.error && !readiness.data ? <ErrorNote error={readiness.error} /> : null}
-      {!readiness.data && !readiness.error ? (
+      {!open ? null : readiness.error && !readiness.data ? <ErrorNote error={readiness.error} /> : null}
+      {open && !readiness.data && !readiness.error ? (
         <div className="row muted">
           <Spinner /> Checking…
         </div>
       ) : null}
-      {items.length ? (
+      {open && items.length ? (
         <ul className="ready-list">
           {items.map((it) => (
             <Row key={it.key} item={it} onAction={() => act(it)} />

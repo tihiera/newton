@@ -39,3 +39,12 @@
   margin-top: 2px;
   overflow-wrap: anywhere;
 }
+
+.ready-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+.ready-card:not(.first-run) .card-head {
+  align-items: center;
+  margin-bottom: 0;
+}
