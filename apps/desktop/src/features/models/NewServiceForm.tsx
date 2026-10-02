@@ -40,7 +40,10 @@ const EMPTY: Form = {
 /** How much text the model reads at once (tokens). 8k is the services' default. */
 const CONTEXTS = [4096, 8192, 16384, 32768, 65536, 131072];
 
-const numberOrUndefined = (s: string) => (s.trim() === "" ? undefined : Number(s));
+const numberOrUndefined = (s: string) => {
+  const n = Number(s);
+  return s.trim() === "" || !Number.isFinite(n) ? undefined : n; // never NaN on the wire
+};
 
 /** `initialModel`: start this model (the reader's "Start it"): picked from the machine
  *  or the catalog as soon as they are known. */
@@ -61,8 +64,11 @@ export function NewServiceForm({
   // Until the user picks one: the first SSH machine (a GPU box), else the first machine.
   const hostId = form.host_id || (hosts?.find((h) => h.kind === "ssh")?.id ?? hosts?.[0]?.id ?? "");
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const memoryOf = (f: Form, base: number | null) =>
-    base === null ? f.memory_gb : String(memoryFor(base, Number(f.context_length) || 8192, Number(f.parallel) || 1));
+  // Without the model's own hint (typed by hand), the memory stays what it is.
+  const memoryOf = (f: Form, base: number | null | undefined) =>
+    typeof base === "number" && Number.isFinite(base)
+      ? String(memoryFor(base, Number(f.context_length) || 8192, Number(f.parallel) || 1))
+      : f.memory_gb;
   const pick = (p: ModelPick) =>
     setForm((f) => ({
       ...f,
@@ -195,7 +201,7 @@ export function NewServiceForm({
         label="Context"
         error={fe("context_length")}
         hint={`How much of a paper the model reads at once. Longer needs more memory${
-          form.memory_gb ? `: ${form.memory_gb} GB` : ""
+          Number.isFinite(Number(form.memory_gb)) && form.memory_gb ? `: ${form.memory_gb} GB` : ""
         }.`}
       >
         <select className="select" value={form.context_length} onChange={setSized("context_length")}>
