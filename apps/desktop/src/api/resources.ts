@@ -18,6 +18,9 @@ import type {
   LibraryScheme,
   LogChunk,
   NotionPage,
+  ConnectFlow,
+  GithubDeviceStart,
+  NotionAuthorizeStart,
   PollSummary,
   Profile,
   Publication,
@@ -150,6 +153,18 @@ export function createApi(c: AgentdClient = agentd) {
       connect: (target: "github" | "notion", token: string) =>
         c.request<Connectors>(`/connectors/${target}`, { method: "PUT", body: { token } }),
       importGh: () => post<Connectors>("/connectors/github/import-gh"),
+      // One-click Connect (OAuth). GitHub: device flow (show the code, open the URL,
+      // agentd polls GitHub). Notion: open the authorize URL; Notion sends the browser
+      // back to agentd, which keeps the tokens. Poll the flow until it isn't pending.
+      githubDevice: () => post<GithubDeviceStart>("/connectors/github/device"),
+      githubDeviceStatus: (signal?: AbortSignal) => get<ConnectFlow>("/connectors/github/device", undefined, signal),
+      githubDeviceCancel: () => c.request<ConnectFlow>("/connectors/github/device", { method: "DELETE" }),
+      notionAuthorize: () => post<NotionAuthorizeStart>("/connectors/notion/authorize"),
+      notionAuthorizeStatus: (signal?: AbortSignal) =>
+        get<ConnectFlow>("/connectors/notion/authorize", undefined, signal),
+      /** Forgets the pending sign-in; answers with the flow (none, or connected if the
+       *  browser finished first). */
+      notionAuthorizeCancel: () => c.request<ConnectFlow>("/connectors/notion/authorize", { method: "DELETE" }),
       notionPages: (query?: string, signal?: AbortSignal) =>
         get<NotionPage[]>("/connectors/notion/pages", { query: query || undefined }, signal),
       disconnect: (target: "github" | "notion") => c.request<Connectors>(`/connectors/${target}`, { method: "DELETE" }),

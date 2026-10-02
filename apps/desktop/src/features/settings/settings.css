@@ -68,6 +68,39 @@
   flex: 1 1 220px;
   min-width: 0;
 }
+.connector-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.connector-glyph {
+  font-size: 22px;
+  line-height: 1;
+}
+.connect-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
+.connect-code-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.connect-code {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  user-select: all;
+}
+.connect-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .secret-rows {
   display: flex;
   flex-direction: column;

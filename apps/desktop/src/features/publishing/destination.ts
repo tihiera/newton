@@ -1,7 +1,7 @@
 // The publish request a destination choice maps to (docs/ui-handoff.md §5.6). Only
 // the shape: agentd validates the repo and page id and explains what's wrong.
 
-import type { NotionPage } from "../../api";
+import { AgentdError, type Connectors, type NotionPage } from "../../api";
 
 export type Choice = "gist" | "issue" | "notion";
 
@@ -74,4 +74,32 @@ export function closeListOnEscape(e: { key: string; stopPropagation: () => void 
   if (e.key !== "Escape") return;
   e.stopPropagation();
   close();
+}
+
+const NAMES = { github: "GitHub", notion: "Notion" } as const;
+
+/** agentd's sentence when the Notion sign-in can't be renewed any more (409
+ *  notion_reauth from GET /connectors/notion/pages); null for any other answer. */
+export function notionReauthMessage(error: unknown): string | null {
+  return error instanceof AgentdError && error.status === 409 && error.code === "notion_reauth" ? error.message : null;
+}
+
+/** agentd's sentence for a rejected renewal, for when GET /connectors flagged it
+ *  (needs_reauth) before the page list asked: e.g. while pasting a page id. */
+export const NOTION_REAUTH = "Notion's sign-in expired: connect Notion again";
+
+/** Why the choice can't be published yet, as the Open Settings note says it: not
+ *  connected, or (Notion) its sign-in expired, in agentd's words. null while
+ *  agentd's connectors aren't read yet, and once nothing stands in the way. */
+export function settingsBlock(
+  choice: Choice,
+  conns: Connectors | undefined,
+  notionReauth: string | null,
+): string | null {
+  if (!conns) return null;
+  const target = connectorOf(choice);
+  if (!conns[target]) return `Connect ${NAMES[target]} in Settings to publish here.`;
+  if (target !== "notion") return null;
+  if (notionReauth) return notionReauth;
+  return conns.accounts?.notion?.needs_reauth === true ? NOTION_REAUTH : null;
 }

@@ -504,9 +504,54 @@ export interface RouterCredentials {
   note?: string;
 }
 
+export interface ConnectorAccount {
+  /** GitHub login, or the Notion workspace's name. */
+  name: string;
+  /** Notion workspace icon (emoji or URL), GitHub avatar URL; null when none. */
+  icon: string | null;
+  /** How it was connected: "oauth" (Connect button), "token" (pasted), "gh" (GitHub CLI). */
+  method: "oauth" | "token" | "gh";
+  connected_at: number;
+  /** Notion only: agentd's renewal of the sign-in was rejected; connect again. Cleared
+   *  by a reconnect, a pasted token or Disconnect. */
+  needs_reauth?: boolean;
+}
+
 export interface Connectors {
   github: boolean;
   notion: boolean;
+  /** Who is connected, when agentd knows (null for an older token it never looked up). */
+  accounts?: { github: ConnectorAccount | null; notion: ConnectorAccount | null };
+  /** Whether the one-click Connect (OAuth) is set up in this build; else paste a token. */
+  oauth?: { github: boolean; notion: boolean };
+}
+
+/** POST /connectors/github/device: show user_code and open verification_uri. */
+export interface GithubDeviceStart {
+  user_code: string;
+  verification_uri: string;
+  expires_at: number;
+  interval: number;
+}
+
+export type ConnectFlowState = "none" | "pending" | "connected" | "denied" | "expired" | "failed";
+
+/** GET /connectors/github/device and GET /connectors/notion/authorize. */
+export interface ConnectFlow {
+  state: ConnectFlowState;
+  /** agentd's sentence when denied / expired / failed. */
+  error?: string | null;
+  user_code?: string | null;
+  /** While pending: GitHub's device page, or Notion's authorize URL. */
+  verification_uri?: string | null;
+  expires_at?: number | null;
+  account?: ConnectorAccount | null;
+}
+
+/** POST /connectors/notion/authorize: open url in the browser. */
+export interface NotionAuthorizeStart {
+  url: string;
+  expires_at: number;
 }
 
 /** A Notion page the connected integration can write under (GET /connectors/notion/pages). */

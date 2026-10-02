@@ -19,6 +19,7 @@
         { "url": "https://doi.org/*" },
         { "url": "https://gist.github.com/*" },
         { "url": "https://github.com/*" },
+        { "url": "https://api.notion.com/v1/oauth/authorize[?]*" },
         { "url": "https://www.notion.so/*" },
         { "url": "https://notion.so/*" }
       ]

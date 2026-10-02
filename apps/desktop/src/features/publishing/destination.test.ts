@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { NotionPage } from "../../api";
+import { AgentdError, type Connectors, type NotionPage } from "../../api";
 import {
+  NOTION_REAUTH,
   PAGE_SEARCH_FROM,
   closeListOnEscape,
   connectorOf,
   missingInput,
   needsPageSearch,
+  notionReauthMessage,
   pageListHint,
   publishRequest,
+  settingsBlock,
   takePageAnswer,
   type PageList,
 } from "./destination";
@@ -102,5 +105,54 @@ describe("closeListOnEscape", () => {
     closeListOnEscape(e, () => closed++);
     expect(closed).toBe(0);
     expect(e.stopped).toBe(false);
+  });
+});
+
+const SENTENCE = "Notion's sign-in expired: connect Notion again";
+const reauth409 = () =>
+  new AgentdError("http", SENTENCE, { status: 409, code: "notion_reauth", path: "/connectors/notion/pages" });
+
+describe("notionReauthMessage", () => {
+  it("takes agentd's sentence from a 409 notion_reauth only", () => {
+    expect(notionReauthMessage(reauth409())).toBe(SENTENCE);
+    expect(notionReauthMessage(new AgentdError("http", "busy", { status: 409, code: "other" }))).toBeNull();
+    expect(
+      notionReauthMessage(
+        new AgentdError("http", "Notion couldn't be reached to renew the sign-in: try again in a moment", {
+          status: 502,
+        }),
+      ),
+    ).toBeNull();
+    expect(notionReauthMessage(new Error("boom"))).toBeNull();
+    expect(notionReauthMessage(undefined)).toBeNull();
+  });
+});
+
+describe("settingsBlock", () => {
+  const conns = (over: Partial<Connectors> = {}): Connectors => ({ github: true, notion: true, ...over });
+  it("waits for agentd's connectors", () => {
+    expect(settingsBlock("notion", undefined, SENTENCE)).toBeNull();
+  });
+  it("sends a missing connection to Settings", () => {
+    expect(settingsBlock("issue", conns({ github: false }), null)).toBe("Connect GitHub in Settings to publish here.");
+    expect(settingsBlock("notion", conns({ notion: false }), SENTENCE)).toBe(
+      "Connect Notion in Settings to publish here.",
+    );
+  });
+  it("sends an expired Notion sign-in to Settings in agentd's words", () => {
+    expect(settingsBlock("notion", conns(), notionReauthMessage(reauth409()))).toBe(SENTENCE);
+    expect(settingsBlock("gist", conns(), SENTENCE)).toBeNull();
+    expect(settingsBlock("notion", conns(), null)).toBeNull();
+  });
+  it("reads agentd's flag before the page list has asked", () => {
+    const flagged = conns({
+      accounts: {
+        github: null,
+        notion: { name: "Lab", icon: null, method: "oauth", connected_at: 1, needs_reauth: true },
+      },
+    });
+    expect(settingsBlock("notion", flagged, null)).toBe(NOTION_REAUTH);
+    expect(NOTION_REAUTH).toBe(SENTENCE);
+    expect(settingsBlock("issue", flagged, null)).toBeNull();
   });
 });

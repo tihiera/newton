@@ -13,8 +13,10 @@ import {
   connectorOf,
   missingInput,
   needsPageSearch,
+  notionReauthMessage,
   pageListHint,
   publishRequest,
+  settingsBlock,
   takePageAnswer,
   type Choice,
   type PageList,
@@ -26,8 +28,6 @@ const CHOICES: Array<{ id: Choice; icon: string; title: string; sub: string }> =
   { id: "issue", icon: "alert", title: "GitHub Issue", sub: "Post to a repository" },
   { id: "notion", icon: "notion", title: "Notion page", sub: "Publish below a parent page" },
 ];
-
-const NAMES = { github: "GitHub", notion: "Notion" } as const;
 
 export function PublishDialog({
   experiment,
@@ -44,6 +44,9 @@ export function PublishDialog({
   const connector = connectorOf(choice);
   const connected = connectors.data?.[connector];
   const missing = missingInput(choice, repo, page);
+  // agentd's sentence when listing Notion pages found its sign-in expired.
+  const [notionReauth, setNotionReauth] = useState<string | null>(null);
+  const block = settingsBlock(choice, connectors.data, notionReauth);
 
   const send = useCallback(async () => {
     const req = publishRequest(choice, repo, page);
@@ -119,12 +122,14 @@ export function PublishDialog({
               />
             </Field>
           ) : null}
-          {choice === "notion" && connected ? <ParentPagePicker page={page} onPage={setPage} /> : null}
+          {choice === "notion" && connected ? (
+            <ParentPagePicker page={page} onPage={setPage} onReauth={setNotionReauth} />
+          ) : null}
           {connectors.error ? <ErrorNote error={connectors.error} /> : null}
-          {connectors.data && !connected ? (
+          {block ? (
             <Note tone="warn" icon="link">
               <div className="row" style={{ gap: 12 }}>
-                <span>Connect {NAMES[connector]} in Settings to publish here.</span>
+                <span>{block}</span>
                 <button
                   className="btn"
                   onClick={() => {
@@ -147,7 +152,7 @@ export function PublishDialog({
         </button>
         <button
           className="btn primary large block"
-          disabled={action.busy || !connected || missing !== null}
+          disabled={action.busy || !connected || block !== null || missing !== null}
           onClick={submit}
         >
           {action.busy ? <Spinner /> : null}
@@ -161,8 +166,17 @@ export function PublishDialog({
 const PAGE_ID_HINT = "The parent page's id: 32 hexadecimal characters.";
 
 /** The Notion parent page: picked from the pages the integration can see, or pasted
- *  as an id for one it can't list. agentd validates either. */
-function ParentPagePicker({ page, onPage }: { page: string; onPage: (id: string) => void }) {
+ *  as an id for one it can't list. agentd validates either. An expired sign-in goes
+ *  to the dialog (onReauth), which sends the user to Settings. */
+function ParentPagePicker({
+  page,
+  onPage,
+  onReauth,
+}: {
+  page: string;
+  onPage: (id: string) => void;
+  onReauth: (message: string | null) => void;
+}) {
   const [pasting, setPasting] = useState(false);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<NotionPage>();
@@ -186,6 +200,12 @@ function ParentPagePicker({ page, onPage }: { page: string; onPage: (id: string)
     setTaken(pages.data);
     setList(takePageAnswer(list, pages.data, debounced));
   }
+  const reauth = notionReauthMessage(pages.error);
+  // Reported only once an answer settles it: a list read clears it, a 409 sets it.
+  const settled = pages.data !== undefined || pages.error !== undefined;
+  useEffect(() => {
+    if (settled) onReauth(reauth);
+  }, [settled, reauth, onReauth]);
   const { shown, listed } = list;
   const hint = pageListHint(list);
   const selected = picked && picked.id === page ? picked : shown?.find((p) => p.id === page);
@@ -291,7 +311,7 @@ function ParentPagePicker({ page, onPage }: { page: string; onPage: (id: string)
         </div>
       ) : null}
       {hint === "share" ? <Note icon="link">Share the page with your Notion integration, then reopen.</Note> : null}
-      {pages.error ? <ErrorNote error={pages.error} /> : null}
+      {pages.error && !reauth ? <ErrorNote error={pages.error} /> : null}
       <button type="button" className="pub-switch" onClick={togglePaste}>
         Paste a page id instead
       </button>
