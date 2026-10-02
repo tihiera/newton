@@ -491,7 +491,7 @@ reader's context, ESLint + Prettier. Next: **B7** (demo hardening).
 
 - **Built** as 6 units in parallel (2 backend, 4 desktop) with disjoint files against a
   fixed API contract; each unit reviewed on 2 lenses, each finding verified by a skeptic,
-  then fixed: 15 confirmed and fixed, 1 rejected. An integration review (hooks,
+  then fixed: 17 confirmed and fixed, 1 rejected. An integration review (hooks,
   backend flow, UI contract) confirmed 4 more, all fixed with tests.
 - **Live** (browser UI against agentd):
   - arXiv:2512.08611 read by llama3.2:3b with the **8k** context that failed before:
