@@ -112,7 +112,7 @@
 }
 .pw-prov-grid {
   display: grid;
-  grid-template-columns: 130px 1fr;
+  grid-template-columns: 130px minmax(0, 1fr);
   gap: 8px 12px;
   margin-top: 14px;
   font-size: 13px;
@@ -125,7 +125,7 @@
 }
 .pw-claim {
   display: grid;
-  grid-template-columns: 150px 1fr;
+  grid-template-columns: 150px minmax(0, 1fr);
   gap: 14px;
   padding: 14px 0;
   border-top: 1px solid var(--border);

@@ -42,7 +42,7 @@
 
 .pub-row {
   display: grid;
-  grid-template-columns: 38px 1fr auto;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
   gap: 14px;
   align-items: start;
   padding: 12px 0;
@@ -104,6 +104,7 @@
   flex-direction: column;
   max-height: 240px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .pub-page {
   display: flex;

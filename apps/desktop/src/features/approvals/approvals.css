@@ -1,7 +1,7 @@
 /* Approvals: review dialog, drawer cards and detail rows (mockups 03, 07). */
 
 .ap-row {
-  grid-template-columns: 56px 1fr auto;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
   align-items: start;
 }
 .ap-row .icon-tile {
@@ -18,7 +18,7 @@
 }
 .ap-pairs {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 4px 18px;
   margin-top: 4px;
   font-size: 14px;
@@ -38,7 +38,7 @@
 }
 .ap-generic-row {
   display: grid;
-  grid-template-columns: 170px 1fr;
+  grid-template-columns: 170px minmax(0, 1fr);
   gap: 12px;
   padding: 9px 0;
   border-top: 1px solid var(--border);
@@ -58,7 +58,8 @@
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 220px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .ap-all > summary {
   cursor: pointer;
@@ -149,7 +150,7 @@
   padding: 20px;
 }
 .ap-card .detail-row {
-  grid-template-columns: 48px 1fr auto;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
   padding: 12px 14px;
 }
 .ap-card .ap-row .icon-tile {
@@ -158,7 +159,7 @@
 }
 .ap-card .facts {
   grid-auto-flow: row;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 .ap-card .fact:nth-child(odd) {
   border-left: 0;

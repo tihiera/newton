@@ -48,7 +48,7 @@ a:hover {
 
 .shell {
   display: grid;
-  grid-template-columns: var(--sidebar-w) auto 1fr;
+  grid-template-columns: var(--sidebar-w) auto minmax(0, 1fr);
   gap: 12px;
   height: 100%;
   padding: 34px 12px 12px;
@@ -134,6 +134,7 @@ a:hover {
 .nav-scroll {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -250,6 +251,7 @@ a:hover {
 .inbox-list {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 4px 10px 16px;
   display: flex;
   flex-direction: column;
@@ -304,6 +306,8 @@ a:hover {
 .workspace-scroll {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
   padding: 26px 30px 40px;
 }
 .workspace-top {
@@ -362,7 +366,7 @@ a:hover {
 }
 .grid-2 {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -632,7 +636,7 @@ a:hover {
 }
 .kv {
   display: grid;
-  grid-template-columns: 36px 1fr 1.2fr;
+  grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.2fr);
   align-items: center;
   gap: 10px 14px;
 }
@@ -787,7 +791,7 @@ a:hover {
 }
 .tl-card {
   display: grid;
-  grid-template-columns: 56px 1fr auto;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
   gap: 18px;
   align-items: start;
   padding: 18px 22px;
@@ -873,7 +877,7 @@ a:hover {
 }
 .check {
   display: grid;
-  grid-template-columns: 22px 150px 1fr;
+  grid-template-columns: 22px 150px minmax(0, 1fr);
   gap: 10px;
   padding: 10px 0;
   border-top: 1px solid var(--border);
@@ -897,7 +901,8 @@ a:hover {
   border-radius: var(--radius-sm);
   padding: 12px 14px;
   max-height: 280px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -934,6 +939,8 @@ a:hover {
 .drawer-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
   padding: 10px 26px 26px 30px;
 }
 .drawer-foot {
@@ -959,6 +966,8 @@ a:hover {
 }
 .modal-body {
   overflow-y: auto;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
   padding: 30px 34px 28px;
 }
 .modal-close {
@@ -975,7 +984,7 @@ a:hover {
 }
 .detail-row {
   display: grid;
-  grid-template-columns: 56px 1fr auto;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
   gap: 16px;
   align-items: center;
   padding: 14px 16px;
@@ -997,7 +1006,7 @@ a:hover {
 }
 .choice-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 .choice {
@@ -1059,7 +1068,8 @@ a:hover {
   border-radius: var(--radius-lg);
   padding: 22px 26px;
   max-height: 300px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* markdown report */
@@ -1239,4 +1249,11 @@ a:hover {
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* Never scroll sideways: long words (ids, DOIs, paths) wrap instead. */
+html,
+body,
+#root {
+  overflow-x: hidden;
 }

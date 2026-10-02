@@ -19,7 +19,7 @@
 }
 .settings-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px 16px;
   align-items: start;
 }
@@ -110,7 +110,7 @@
 }
 .secret-row {
   display: grid;
-  grid-template-columns: 80px 1fr auto;
+  grid-template-columns: 80px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 10px 10px 10px 16px;
@@ -139,6 +139,6 @@
 }
 @media (max-width: 720px) {
   .settings-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
