@@ -4,12 +4,11 @@ _Last updated: 2026-10-02_
 
 ## Current milestone
 
-**SV4, E2, B4, B5 and B6 done** (2026-10-02). Mac models via MLX, methods as data
-(SchemeIR + generators + assumption checks), paper ingestion from arXiv, the research
-loop with scientific memory, and approval-gated publishing to GitHub / Notion. All
-live-verified except publishing (built and tested against mocked APIs: it needs the
-user's tokens and consent to post). SV4 and E2 each had an adversarial review round.
-Next: **U2** (UI for library, evidence, diary) once the design screenshots arrive, and
+**U1 done** (2026-10-02): the Newton desktop UI from the user's design, live against
+agentd on this Mac. The whole core flow runs from the UI: research created, arXiv
+polled, papers carded, a paper mapped onto the IR, experiment proposed, reviewed,
+approved, run, evidence shown, publication requested and rejected through approval.
+SV4, E2, B4, B5 and B6 were done before. Next: **U2** (close the UI gaps below) and
 **B7** (demo hardening).
 
 ## Decisions
@@ -489,6 +488,33 @@ Next: **U2** (UI for library, evidence, diary) once the design screenshots arriv
   - **Evidence:** a result that ran on the wrong backend is red, and reports show
     the device per variant.
 
+## Verification (2026-10-02, U1 desktop UI)
+
+Driven through the UI in a browser against live agentd (`pnpm dev:web`, headless
+Chrome, screenshots in the session scratchpad):
+- **Research:** New research with keyword `(evil)` showed agentd's 422 (keywords.1
+  pattern); then created. Poll now: 8 papers, 3 dismissed, 3 carded, 1 failed and
+  1 stuck at triage (the 3B model's answers), each with agentd's sentence.
+- **Reader:** an MLX service was refused verbatim (Mac models off, then on battery);
+  llama3.2:3b by Ollama on This Mac downloaded after approval in the drawer. With an
+  8k context the model's answer was cut (prompt = 8,192 tokens exactly) so arXiv:1101.4315
+  failed; a 16k-context service carded it, mapped onto the IR.
+- **Experiment:** proposed on This Mac, reviewed, approved: ran in 3 s per variant,
+  yellow, order 2.00 vs upwind 0.99, L2 1.0e-5 vs 2.7e-3, claimed TVD refuted; logs
+  and provenance shown, numbers only from the ValidationReport.
+- **Publishing:** a generated fake Notion token (stored locally, never sent),
+  publication requested, previewed, rejected with a note; then disconnected.
+- **Host key:** a throwaway local sshd (port 2222): 409 with the fingerprint, Trust &
+  connect, then agentd's auth error verbatim; host removed.
+- **Connection:** agentd stopped: the full-page "agentd isn't running" view; restarted:
+  the UI reconnected by itself (~30 s with backoff).
+- **Polling:** 0 requests while hidden for 15 s, resumes at once when visible; a closed
+  drawer stops its polls.
+- **Secrets:** agentd token and router key not in the production bundle, logs or source.
+- vitest 59 pass (2 skipped), tsc clean, `pnpm build`, cargo test 7 pass (1 ignored),
+  clippy clean, `scripts/test.sh` 498 pass, 11 skipped.
+- **Not done live:** the Spark from the UI (Tailscale SSH asks for a browser re-auth).
+
 ## Verification (2026-10-02)
 
 - **SV4 live (this Mac):** qwen2.5-0.5B-4bit via MLX, pinned `a5339a41`: approved
@@ -607,6 +633,19 @@ Next: **U2** (UI for library, evidence, diary) once the design screenshots arriv
   ran and failed is a result.
 - Experiment params travel as `params.json` in the bundle, and argv is fixed per benchmark.
 
+## Known gaps (UI)
+
+- No linter or formatter is configured for `apps/desktop` (only tsc).
+- 422 errors on list items (`keywords.1`) can't be attached to one input: shown under
+  the form.
+- No journal name for papers (author/category · year), no Notion page picker (an id is
+  typed), no Export button, no "New experiment" once a paper has one (agentd proposes
+  once per paper).
+- arXiv links open with a plain `<a target=_blank>`; the Tauri shell may need the opener
+  plugin.
+- Failed papers can be read again (agentd retries on a re-ingest); a context that is
+  too small for the reader shows only as "not valid JSON".
+
 ## Known gaps
 
 - GPU support status of a run in progress lives in agentd's memory (`gpu_task`);
@@ -642,7 +681,6 @@ Next: **U2** (UI for library, evidence, diary) once the design screenshots arriv
 
 ## Next action
 
-U2 (library, evidence board, research diary in the desktop app) as soon as the user's
-design screenshots arrive; B7 (demo hardening, offline modes, signed build). A bigger
-reading model (B4/B5 use llama3.2:3b now) will read papers better: qwen2.5:7b or larger
-on the GB10.
+U2: close the UI gaps above. B7 (demo hardening, offline modes, signed build). A bigger
+reading model with a 16k+ context (qwen2.5:7b or larger on the GB10) will read papers
+better than llama3.2:3b.

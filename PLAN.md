@@ -34,12 +34,13 @@ Every milestone ends with `scripts/test.sh` green and STATUS.md updated.
 | B4 | Paper ingestion | arXiv → text → model card (through the router) → SchemeIR → proposed experiment; live on real physics papers |
 | B5 | Research loop | goals poll arXiv, triage, card, propose (approval-gated), dedup by method, findings as scientific memory; live poll on today's arXiv |
 | B6 | Publishing | GitHub gist / issue and Notion page, every one approved, exactly the approved text sent, tokens in the Keychain |
+| U1 | Desktop UI | Tauri v2 + React 19 from the user's design: sidebar, paper inbox, research workspace, paper tabs, propose → review → approve → jobs/logs → evidence, publish via approval, compute (host-key trust), models, settings, approvals; no business logic in React; live against agentd on this Mac |
 
 ## Next
 
 | # | ID | Step | What gets built | Done when |
 |---|---|---|---|---|
-| 8 | U1 | **Desktop UI shell** | Tauri: hosts picker (from `/ssh/hosts`) → Connect/Trust → capabilities → experiment → approve → live logs → report | Whole flow driven from the Mac UI **Shell built** (`apps/desktop`); screens follow the user's design |
+| 9 | U2 | **Library, evidence board, research diary** | built with U1 from the design (all papers, evidence from the ValidationReport, research timeline); left: see STATUS "Known gaps (UI)" | the gaps are closed or accepted |
 
 ## Then: using the Mac and the GB10 together (before paper ingestion)
 
@@ -55,7 +56,6 @@ All of these are done (SV0–SV4, E2): see Done.
 
 | ID | Milestone |
 |---|---|
-| U2 | UI for library, evidence board, research diary |
 | B7 | Demo hardening, offline/degraded modes, signed build |
 | — | Remote Mac mini as an SSH worker (bootstrap Darwin branch, Python ≥3.10 selection) |
 | E4 | Optional, needs a SPEC decision: agent-drafted CUDA/Metal kernels shown as a diff for approval, pinned by sha256, compiled and run only inside a sandbox on the Spark |

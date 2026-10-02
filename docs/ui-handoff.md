@@ -137,9 +137,9 @@ All paths are relative to `base_url`. JSON in and out unless noted.
 - **`POST /hosts/{id}/connect`** is the one-click path: it verifies the host key,
   installs or starts the worker, checks it, and queues a selftest.
   - Returns `{host, selftest_job_id}`.
-  - `409 {"error", "fingerprints": ["SHA256:…", …]}` means the host key isn't
+  - `409 {"error", "code": "hostkey_unknown", "fingerprints": [{"type": "ssh-ed25519", "fingerprint": "SHA256:…"}]}` means the host key isn't
     trusted. Show the fingerprints and ask the user to confirm. Then call
-    `POST /hosts/{id}/hostkeys/trust {fingerprints}` and connect again.
+    `POST /hosts/{id}/hostkeys/trust {fingerprints: ["SHA256:…"]}` (the strings) and connect again.
 - `GET /hosts/{id}/hostkeys` returns the scanned keys.
 - `POST /hosts/{id}/check` re-checks the host.
 - `POST /hosts/{id}/bootstrap` (re)installs the worker.
