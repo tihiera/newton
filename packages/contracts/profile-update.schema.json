@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "description": "PATCH /profile. No accounts: one local profile.",
+  "properties": {
+    "default_model": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/:@-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "what model 'default' means in /v1 requests (a model, model@revision or service id); null clears it",
+      "title": "Default Model"
+    },
+    "display_name": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Display Name"
+    },
+    "mac_models": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "allow model services on this Mac (MLX); off by default, and even on they run only on AC power and without memory pressure",
+      "title": "Mac Models"
+    }
+  },
+  "title": "ProfileUpdate",
+  "type": "object"
+}

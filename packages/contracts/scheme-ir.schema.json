@@ -1,0 +1,226 @@
+{
+  "$defs": {
+    "IRClaims": {
+      "additionalProperties": false,
+      "properties": {
+        "max_cfl": {
+          "exclusiveMinimum": 0,
+          "maximum": 2,
+          "title": "Max Cfl",
+          "type": "number"
+        },
+        "order": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Order",
+          "type": "integer"
+        },
+        "tvd": {
+          "default": false,
+          "title": "Tvd",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "order",
+        "max_cfl"
+      ],
+      "title": "IRClaims",
+      "type": "object"
+    },
+    "IRExpr": {
+      "additionalProperties": false,
+      "description": "A(c) node: two arguments, each a number, \"c\", or another node.",
+      "properties": {
+        "args": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "const": "c",
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/IRExpr"
+              }
+            ]
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Args",
+          "type": "array"
+        },
+        "op": {
+          "enum": [
+            "add",
+            "sub",
+            "mul",
+            "div"
+          ],
+          "title": "Op",
+          "type": "string"
+        }
+      },
+      "required": [
+        "op",
+        "args"
+      ],
+      "title": "IRExpr",
+      "type": "object"
+    },
+    "IRFlux": {
+      "additionalProperties": false,
+      "properties": {
+        "correction": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "const": "c",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/IRExpr"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A(c) in F = u_i + A(c) \u03c6(r) (u_{i+1} - u_i); null: first-order upwind",
+          "title": "Correction"
+        },
+        "limiter": {
+          "default": "none",
+          "enum": [
+            "none",
+            "minmod",
+            "van_leer",
+            "superbee",
+            "mc",
+            "koren"
+          ],
+          "title": "Limiter",
+          "type": "string"
+        }
+      },
+      "required": [
+        "correction"
+      ],
+      "title": "IRFlux",
+      "type": "object"
+    },
+    "IRTableau": {
+      "additionalProperties": false,
+      "properties": {
+        "a": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "A",
+          "type": "array"
+        },
+        "b": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "B",
+          "type": "array"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ],
+      "title": "IRTableau",
+      "type": "object"
+    },
+    "IRTime": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "default": "one_step",
+          "enum": [
+            "one_step",
+            "rk"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "tableau": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IRTableau"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "IRTime",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A finite-volume scheme for linear advection as data: trusted generators turn it\ninto numpy / CUDA / Metal code; the experiment checks its claims.",
+  "properties": {
+    "claims": {
+      "$ref": "#/$defs/IRClaims"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "flux": {
+      "$ref": "#/$defs/IRFlux"
+    },
+    "name": {
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "title": "Name",
+      "type": "string"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source"
+    },
+    "time": {
+      "$ref": "#/$defs/IRTime"
+    }
+  },
+  "required": [
+    "name",
+    "flux",
+    "claims"
+  ],
+  "title": "SchemeIR",
+  "type": "object"
+}

@@ -1,0 +1,57 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "auto_propose": {
+      "default": true,
+      "description": "propose experiments for new schemes (they still need approval)",
+      "title": "Auto Propose",
+      "type": "boolean"
+    },
+    "categories": {
+      "items": {
+        "maxLength": 40,
+        "pattern": "^[a-z-]+(\\.[A-Za-z-]+)?$",
+        "type": "string"
+      },
+      "maxItems": 10,
+      "title": "Categories",
+      "type": "array"
+    },
+    "description": {
+      "default": "",
+      "maxLength": 10000,
+      "title": "Description",
+      "type": "string"
+    },
+    "keywords": {
+      "items": {
+        "maxLength": 60,
+        "minLength": 2,
+        "pattern": "^[A-Za-z0-9 .+'-]+$",
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Keywords",
+      "type": "array"
+    },
+    "poll_hours": {
+      "default": 24,
+      "description": "how often to look",
+      "maximum": 720,
+      "minimum": 1,
+      "title": "Poll Hours",
+      "type": "number"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "title"
+  ],
+  "title": "GoalCreate",
+  "type": "object"
+}

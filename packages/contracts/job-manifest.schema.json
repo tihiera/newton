@@ -1,0 +1,111 @@
+{
+  "additionalProperties": false,
+  "description": "What the worker executes. Never contains shell strings.",
+  "properties": {
+    "artifact_paths": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Artifact Paths",
+      "type": "array"
+    },
+    "backend": {
+      "default": "cpu",
+      "enum": [
+        "cpu",
+        "cuda",
+        "metal"
+      ],
+      "title": "Backend",
+      "type": "string"
+    },
+    "benchmark": {
+      "title": "Benchmark",
+      "type": "string"
+    },
+    "command": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 3,
+      "title": "Command",
+      "type": "array"
+    },
+    "exclusive": {
+      "default": false,
+      "title": "Exclusive",
+      "type": "boolean"
+    },
+    "experiment_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Experiment Id"
+    },
+    "job_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "kernel_hashes": {
+      "additionalProperties": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Kernel Hashes",
+      "type": "object"
+    },
+    "metrics": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Metrics",
+      "type": "array"
+    },
+    "repository_commit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Repository Commit"
+    },
+    "scheme_ir_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scheme Ir Digest"
+    },
+    "timeout_seconds": {
+      "default": 900,
+      "maximum": 604800,
+      "minimum": 1,
+      "title": "Timeout Seconds",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "job_id",
+    "benchmark",
+    "command"
+  ],
+  "title": "JobManifest",
+  "type": "object"
+}

@@ -1,0 +1,212 @@
+{
+  "$defs": {
+    "CandidateVerdict": {
+      "properties": {
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/Check"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "evidence": {
+          "enum": [
+            "green",
+            "yellow",
+            "red",
+            "unknown"
+          ],
+          "title": "Evidence",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "evidence",
+        "checks",
+        "summary"
+      ],
+      "title": "CandidateVerdict",
+      "type": "object"
+    },
+    "Check": {
+      "properties": {
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "passed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Passed"
+        }
+      },
+      "required": [
+        "name",
+        "passed",
+        "detail"
+      ],
+      "title": "Check",
+      "type": "object"
+    },
+    "VariantEvaluation": {
+      "properties": {
+        "assumptions": {
+          "description": "the scheme's claims against what the run measured",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "backend": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Backend"
+        },
+        "device": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device"
+        },
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "job_state": {
+          "title": "Job State",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "metrics": {
+          "additionalProperties": true,
+          "title": "Metrics",
+          "type": "object"
+        },
+        "role": {
+          "enum": [
+            "baseline",
+            "candidate"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "role",
+        "job_id",
+        "job_state"
+      ],
+      "title": "VariantEvaluation",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "benchmark": {
+      "title": "Benchmark",
+      "type": "string"
+    },
+    "evidence": {
+      "enum": [
+        "green",
+        "yellow",
+        "red",
+        "unknown"
+      ],
+      "title": "Evidence",
+      "type": "string"
+    },
+    "experiment_id": {
+      "title": "Experiment Id",
+      "type": "string"
+    },
+    "provenance": {
+      "additionalProperties": true,
+      "title": "Provenance",
+      "type": "object"
+    },
+    "report_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Report Path"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "variants": {
+      "items": {
+        "$ref": "#/$defs/VariantEvaluation"
+      },
+      "title": "Variants",
+      "type": "array"
+    },
+    "verdicts": {
+      "items": {
+        "$ref": "#/$defs/CandidateVerdict"
+      },
+      "title": "Verdicts",
+      "type": "array"
+    }
+  },
+  "required": [
+    "experiment_id",
+    "title",
+    "benchmark",
+    "evidence",
+    "summary",
+    "variants",
+    "verdicts",
+    "provenance"
+  ],
+  "title": "ValidationReport",
+  "type": "object"
+}

@@ -1,0 +1,489 @@
+{
+  "$defs": {
+    "AdvectionParams": {
+      "additionalProperties": false,
+      "description": "Parameters for benchmarks.advection (periodic linear advection, 1D or 2D).",
+      "properties": {
+        "cfl": {
+          "default": 0.5,
+          "exclusiveMinimum": 0,
+          "maximum": 1.0,
+          "title": "Cfl",
+          "type": "number"
+        },
+        "implementation": {
+          "default": "array",
+          "description": "array: numpy-style array operations; kernel: Newton's hand-written CUDA / Metal kernels (GPU backends only)",
+          "enum": [
+            "array",
+            "kernel"
+          ],
+          "title": "Implementation",
+          "type": "string"
+        },
+        "initial_condition": {
+          "default": "sine",
+          "enum": [
+            "gaussian",
+            "sine",
+            "square"
+          ],
+          "title": "Initial Condition",
+          "type": "string"
+        },
+        "mode": {
+          "default": "convergence",
+          "description": "convergence: refine the grid, compare with the exact solution; throughput: a fixed number of steps on one large grid, timed",
+          "enum": [
+            "convergence",
+            "throughput"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "precision": {
+          "default": "float64",
+          "enum": [
+            "float64",
+            "float32"
+          ],
+          "title": "Precision",
+          "type": "string"
+        },
+        "repeats": {
+          "default": 3,
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Repeats",
+          "type": "integer"
+        },
+        "resolutions": {
+          "items": {
+            "maximum": 1048576,
+            "minimum": 16,
+            "type": "integer"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Resolutions",
+          "type": "array"
+        },
+        "scheme": {
+          "enum": [
+            "upwind",
+            "lax_wendroff",
+            "muscl_minmod",
+            "muscl_vanleer",
+            "ir"
+          ],
+          "title": "Scheme",
+          "type": "string"
+        },
+        "scheme_ir": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SchemeIR"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "with scheme 'ir' only"
+        },
+        "steps": {
+          "default": 100,
+          "description": "throughput mode only",
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Steps",
+          "type": "integer"
+        },
+        "t_final": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "maximum": 100.0,
+          "title": "T Final",
+          "type": "number"
+        },
+        "velocity": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "maximum": 100.0,
+          "title": "Velocity",
+          "type": "number"
+        },
+        "velocity_y": {
+          "default": 0.5,
+          "description": "2D only",
+          "exclusiveMinimum": 0,
+          "maximum": 100.0,
+          "title": "Velocity Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "scheme"
+      ],
+      "title": "AdvectionParams",
+      "type": "object"
+    },
+    "IRClaims": {
+      "additionalProperties": false,
+      "properties": {
+        "max_cfl": {
+          "exclusiveMinimum": 0,
+          "maximum": 2,
+          "title": "Max Cfl",
+          "type": "number"
+        },
+        "order": {
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Order",
+          "type": "integer"
+        },
+        "tvd": {
+          "default": false,
+          "title": "Tvd",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "order",
+        "max_cfl"
+      ],
+      "title": "IRClaims",
+      "type": "object"
+    },
+    "IRExpr": {
+      "additionalProperties": false,
+      "description": "A(c) node: two arguments, each a number, \"c\", or another node.",
+      "properties": {
+        "args": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "const": "c",
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/IRExpr"
+              }
+            ]
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Args",
+          "type": "array"
+        },
+        "op": {
+          "enum": [
+            "add",
+            "sub",
+            "mul",
+            "div"
+          ],
+          "title": "Op",
+          "type": "string"
+        }
+      },
+      "required": [
+        "op",
+        "args"
+      ],
+      "title": "IRExpr",
+      "type": "object"
+    },
+    "IRFlux": {
+      "additionalProperties": false,
+      "properties": {
+        "correction": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "const": "c",
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/IRExpr"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A(c) in F = u_i + A(c) \u03c6(r) (u_{i+1} - u_i); null: first-order upwind",
+          "title": "Correction"
+        },
+        "limiter": {
+          "default": "none",
+          "enum": [
+            "none",
+            "minmod",
+            "van_leer",
+            "superbee",
+            "mc",
+            "koren"
+          ],
+          "title": "Limiter",
+          "type": "string"
+        }
+      },
+      "required": [
+        "correction"
+      ],
+      "title": "IRFlux",
+      "type": "object"
+    },
+    "IRTableau": {
+      "additionalProperties": false,
+      "properties": {
+        "a": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "A",
+          "type": "array"
+        },
+        "b": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "B",
+          "type": "array"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ],
+      "title": "IRTableau",
+      "type": "object"
+    },
+    "IRTime": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "default": "one_step",
+          "enum": [
+            "one_step",
+            "rk"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "tableau": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IRTableau"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "IRTime",
+      "type": "object"
+    },
+    "SchemeIR": {
+      "additionalProperties": false,
+      "description": "A finite-volume scheme for linear advection as data: trusted generators turn it\ninto numpy / CUDA / Metal code; the experiment checks its claims.",
+      "properties": {
+        "claims": {
+          "$ref": "#/$defs/IRClaims"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "flux": {
+          "$ref": "#/$defs/IRFlux"
+        },
+        "name": {
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "time": {
+          "$ref": "#/$defs/IRTime"
+        }
+      },
+      "required": [
+        "name",
+        "flux",
+        "claims"
+      ],
+      "title": "SchemeIR",
+      "type": "object"
+    },
+    "Variant": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/AdvectionParams"
+        },
+        "role": {
+          "enum": [
+            "baseline",
+            "candidate"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "label",
+        "params"
+      ],
+      "title": "Variant",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A structured experiment. The only way remote work gets created.",
+  "properties": {
+    "backend": {
+      "default": "auto",
+      "enum": [
+        "auto",
+        "cpu",
+        "cuda",
+        "metal"
+      ],
+      "title": "Backend",
+      "type": "string"
+    },
+    "benchmark": {
+      "default": "linear_advection_1d",
+      "enum": [
+        "linear_advection_1d",
+        "linear_advection_2d"
+      ],
+      "title": "Benchmark",
+      "type": "string"
+    },
+    "goal_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Goal Id"
+    },
+    "host_id": {
+      "default": "auto",
+      "title": "Host Id",
+      "type": "string"
+    },
+    "hypothesis": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hypothesis"
+    },
+    "objective": {
+      "default": "accuracy",
+      "description": "accuracy: is the candidate more accurate (convergence runs); performance: is it faster for the same result (throughput runs on one grid)",
+      "enum": [
+        "accuracy",
+        "performance"
+      ],
+      "title": "Objective",
+      "type": "string"
+    },
+    "research_item_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Research Item Id"
+    },
+    "timeout_seconds": {
+      "default": 900,
+      "maximum": 86400,
+      "minimum": 10,
+      "title": "Timeout Seconds",
+      "type": "integer"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "variants": {
+      "items": {
+        "$ref": "#/$defs/Variant"
+      },
+      "maxItems": 8,
+      "minItems": 2,
+      "title": "Variants",
+      "type": "array"
+    }
+  },
+  "required": [
+    "title",
+    "variants"
+  ],
+  "title": "ExperimentSpec",
+  "type": "object"
+}

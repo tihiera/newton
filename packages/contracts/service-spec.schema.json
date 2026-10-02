@@ -1,0 +1,185 @@
+{
+  "$defs": {
+    "FakeEngineSettings": {
+      "additionalProperties": false,
+      "description": "Only for engine \"fake\": simulate a real engine's hard parts in tests.",
+      "properties": {
+        "crash_after_s": {
+          "default": 0.0,
+          "maximum": 86400,
+          "minimum": 0,
+          "title": "Crash After S",
+          "type": "number"
+        },
+        "fail_status": {
+          "default": 0,
+          "maximum": 599,
+          "minimum": 0,
+          "title": "Fail Status",
+          "type": "integer"
+        },
+        "hold_memory_mb": {
+          "default": 0,
+          "maximum": 1048576,
+          "minimum": 0,
+          "title": "Hold Memory Mb",
+          "type": "integer"
+        },
+        "ignore_sigterm": {
+          "default": false,
+          "title": "Ignore Sigterm",
+          "type": "boolean"
+        },
+        "mac_gated": {
+          "default": false,
+          "title": "Mac Gated",
+          "type": "boolean"
+        },
+        "reply_delay_s": {
+          "default": 0.0,
+          "maximum": 600,
+          "minimum": 0,
+          "title": "Reply Delay S",
+          "type": "number"
+        },
+        "reply_text": {
+          "anyOf": [
+            {
+              "maxLength": 20000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reply Text"
+        },
+        "startup_delay_s": {
+          "default": 0.0,
+          "maximum": 600,
+          "minimum": 0,
+          "title": "Startup Delay S",
+          "type": "number"
+        },
+        "stream_cut_after": {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Stream Cut After",
+          "type": "integer"
+        },
+        "unhealthy_after_s": {
+          "default": 0.0,
+          "maximum": 86400,
+          "minimum": 0,
+          "title": "Unhealthy After S",
+          "type": "number"
+        }
+      },
+      "title": "FakeEngineSettings",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "What the worker receives: the settings plus the id agentd gave the service.",
+  "properties": {
+    "context_length": {
+      "default": 8192,
+      "maximum": 262144,
+      "minimum": 512,
+      "title": "Context Length",
+      "type": "integer"
+    },
+    "engine": {
+      "enum": [
+        "ollama",
+        "vllm",
+        "mlx",
+        "fake"
+      ],
+      "title": "Engine",
+      "type": "string"
+    },
+    "fake": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FakeEngineSettings"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "kv_cache_type": {
+      "default": "q8_0",
+      "enum": [
+        "f16",
+        "q8_0",
+        "q4_0"
+      ],
+      "title": "Kv Cache Type",
+      "type": "string"
+    },
+    "memory_gb": {
+      "description": "what admission reserves for it (vLLM is sized from it)",
+      "maximum": 1024,
+      "minimum": 0.01,
+      "title": "Memory Gb",
+      "type": "number"
+    },
+    "model": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Model",
+      "type": "string"
+    },
+    "parallel": {
+      "default": 4,
+      "maximum": 64,
+      "minimum": 1,
+      "title": "Parallel",
+      "type": "integer"
+    },
+    "revision": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{12,64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Revision"
+    },
+    "service_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$",
+      "title": "Service Id",
+      "type": "string"
+    },
+    "startup_timeout_s": {
+      "default": 1800,
+      "maximum": 7200,
+      "minimum": 5,
+      "title": "Startup Timeout S",
+      "type": "integer"
+    },
+    "trust_remote_code": {
+      "default": false,
+      "description": "vllm only; runs model-supplied code: needs approval",
+      "title": "Trust Remote Code",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "engine",
+    "model",
+    "memory_gb",
+    "service_id"
+  ],
+  "title": "ServiceSpec",
+  "type": "object"
+}

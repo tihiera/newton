@@ -1,0 +1,90 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "gpu_support": {
+      "default": "auto",
+      "description": "auto: install and verify CuPy when the host has an NVIDIA driver",
+      "enum": [
+        "auto",
+        "off"
+      ],
+      "title": "Gpu Support",
+      "type": "string"
+    },
+    "install_deps": {
+      "default": true,
+      "title": "Install Deps",
+      "type": "boolean"
+    },
+    "kind": {
+      "const": "ssh",
+      "default": "ssh",
+      "title": "Kind",
+      "type": "string"
+    },
+    "max_parallel_jobs": {
+      "default": 2,
+      "maximum": 64,
+      "minimum": 1,
+      "title": "Max Parallel Jobs",
+      "type": "integer"
+    },
+    "name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "python": {
+      "default": "python3",
+      "maxLength": 255,
+      "title": "Python",
+      "type": "string"
+    },
+    "ssh_port": {
+      "anyOf": [
+        {
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ssh Port"
+    },
+    "ssh_target": {
+      "description": "ssh config alias or hostname",
+      "maxLength": 255,
+      "minLength": 1,
+      "title": "Ssh Target",
+      "type": "string"
+    },
+    "ssh_user": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ssh User"
+    },
+    "use_venv": {
+      "default": true,
+      "title": "Use Venv",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "name",
+    "ssh_target"
+  ],
+  "title": "HostCreate",
+  "type": "object"
+}

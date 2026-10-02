@@ -1,0 +1,16 @@
+[project]
+name = "newton-worker"
+version = "0.1.0"
+description = "Newton remote worker (stdlib only)"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+newton-worker = "newton_worker.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["newton_worker"]
