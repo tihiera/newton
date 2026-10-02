@@ -979,7 +979,17 @@ a:hover {
   height: 92vh;
   max-height: 92vh;
 }
+/* A dialog built around a <form>: the form takes the dialog's column, so the body
+   scrolls and the buttons below it stay in view. */
+.modal > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   overflow-wrap: anywhere;
@@ -992,6 +1002,7 @@ a:hover {
   z-index: 2;
 }
 .modal-foot {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 12px;
