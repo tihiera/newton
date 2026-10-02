@@ -78,10 +78,24 @@
 .ex-detail {
   gap: 18px;
 }
+/* One line: state, what is compared, when; then the actions. */
 .ex-head {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ex-head-line {
+  font-size: 16px;
+  font-weight: 540;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 420px;
+}
+.ex-head-when {
+  white-space: nowrap;
 }
 .ex-stepper .stepper {
   margin: 4px 0 0;

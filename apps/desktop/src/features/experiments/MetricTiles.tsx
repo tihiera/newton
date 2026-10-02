@@ -4,20 +4,20 @@
 import type { CandidateVerdict, ValidationReport } from "../../api";
 import { Icon } from "../../components/Icon";
 import { num } from "../../components/time";
-import { baselineOf, candidateOf, claimLabel, claimOutcome } from "./view";
+import { baselineOf, candidateOf, claimLabel, claimOutcome, metricNumber } from "./view";
 
 function Pair({ a, b, aLabel, bLabel }: { a: unknown; b: unknown; aLabel: string; bLabel: string }) {
   return (
     <div className="ex-pair">
       <div>
-        <div className="metric-value">{num(a)}</div>
+        <div className="metric-value">{metricNumber(a)}</div>
         <div className="metric-sub" title={aLabel}>
           {aLabel}
         </div>
       </div>
       <div className="ex-pair-rule" />
       <div>
-        <div className="metric-value">{num(b)}</div>
+        <div className="metric-value">{metricNumber(b)}</div>
         <div className="metric-sub" title={bLabel}>
           {bLabel}
         </div>
@@ -43,8 +43,9 @@ function claimLine(claimed: unknown, measured: unknown): string {
 export function MetricTiles({ report, verdict }: { report: ValidationReport; verdict?: CandidateVerdict }) {
   const cand = candidateOf(report, verdict);
   const base = baselineOf(report);
-  const cLabel = cand ? `Candidate · ${cand.label}` : "Candidate";
-  const bLabel = base ? `Baseline · ${base.label}` : "Baseline";
+  // Short names: the paper's (or library) scheme, and the baseline by its name.
+  const cLabel = cand && cand.label.length <= 18 ? cand.label : "This scheme";
+  const bLabel = base ? base.label : "Baseline";
   const hasOrder = cand?.metrics.observed_order !== undefined || base?.metrics.observed_order !== undefined;
   const hasL2 = cand?.metrics.l2_error !== undefined || base?.metrics.l2_error !== undefined;
 

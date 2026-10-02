@@ -31,10 +31,9 @@
 
 /* -- shared workspace pieces -------------------------------------------------------- */
 .pw-head {
-  padding-right: 170px; /* the Approvals button sits top right */
 }
 .pw-title {
-  font-size: 40px;
+  font-size: 30px;
   font-weight: 560;
   letter-spacing: -0.028em;
   line-height: 1.08;
@@ -42,15 +41,18 @@
 }
 .pw-sub {
   color: var(--muted);
-  font-size: 15.5px;
-  margin-top: 10px;
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pw-chips {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 16px;
+  flex-wrap: nowrap;
+  margin-top: 12px;
 }
 .pw-back {
   display: inline-flex;

@@ -5,14 +5,13 @@ import { saveFile } from "../../app/platform";
 import { useAction } from "../../hooks/useAction";
 import { ExternalLink } from "../../components/ExternalLink";
 import { Icon } from "../../components/Icon";
-import { Chip, ErrorNote, Spinner, StateChip } from "../../components/ui";
+import { ErrorNote, Spinner, StateChip } from "../../components/ui";
 import { experimentsFor } from "../experiments/view";
 import { canReadAgain, exportFileName, latestReported, paperSubline, paperTitle, paperUrl } from "./format";
 
 /** Mockup 02's header (the back link is in the workspace bar): big title, sub line, state and claim chips; the
  *  export of the newest reported experiment (mockup 06) and the link to arXiv. */
 export function PaperHeader({ item }: { item: ResearchItem }) {
-  const method = item.data.card?.method;
   const url = paperUrl(item);
   // agentd retries a failed paper (or one whose triage failed) when it is ingested
   // again (same item, fresh read).
@@ -28,20 +27,10 @@ export function PaperHeader({ item }: { item: ResearchItem }) {
   return (
     <div className="mesh-header pw-head">
       <h1 className="pw-title">{paperTitle(item)}</h1>
-      <p className="pw-sub">{paperSubline(item)}</p>
+      {/* One line: what the paper is and where it stands, then its actions. */}
       <div className="pw-chips">
-        <StateChip kind="paper" state={item.state} large />
-        {method?.tvd ? (
-          <Chip tone="lavender" large>
-            <Icon name="sparkle" size={16} />
-            TVD claimed
-          </Chip>
-        ) : null}
-        {typeof method?.order === "number" ? (
-          <Chip tone="outline" large>
-            Order {method.order} claimed
-          </Chip>
-        ) : null}
+        <StateChip kind="paper" state={item.state} />
+        <span className="pw-sub">{paperSubline(item)}</span>
         <span className="spacer" />
         {canReadAgain(item) ? (
           <button className="btn" disabled={retry.busy} onClick={() => void retry.run()}>

@@ -17,7 +17,7 @@ import { AwaitingCard } from "./AwaitingCard";
 import { JobsList } from "./JobsList";
 import { ReportModal } from "./ReportModal";
 import { ReportedView } from "./ReportedView";
-import { isTerminal, STEPS, stepOf } from "./view";
+import { comparisonLine, isTerminal, STEPS, stepOf } from "./view";
 
 const LIVE_MS = 3000;
 
@@ -54,15 +54,12 @@ function ExperimentBody({ exp, refresh, next }: { exp: Experiment; refresh: () =
   return (
     <div className="stack ex-detail">
       <div className="ex-head">
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="h-section">{exp.title}</div>
-          <div className="row small muted" style={{ marginTop: 6 }}>
-            <StateChip kind="experiment" state={exp.state} />
-            <span>{exp.spec?.benchmark}</span>
-            <span>·</span>
-            <span>Created {when(exp.created_at)}</span>
-          </div>
-        </div>
+        <StateChip kind="experiment" state={exp.state} />
+        <span className="ex-head-line" title={exp.title}>
+          {comparisonLine(exp)}
+        </span>
+        <span className="small muted ex-head-when">{when(exp.created_at)}</span>
+        <span className="spacer" />
         <div className="top-actions">
           {exp.report_path ? (
             <button className="btn" onClick={() => setOverlay("report")}>
@@ -80,9 +77,11 @@ function ExperimentBody({ exp, refresh, next }: { exp: Experiment; refresh: () =
         </div>
       </div>
 
-      <div className="ex-stepper">
-        <Stepper steps={STEPS} current={step.current} failed={step.failed} />
-      </div>
+      {reported ? null : (
+        <div className="ex-stepper">
+          <Stepper steps={STEPS} current={step.current} failed={step.failed} />
+        </div>
+      )}
 
       {exp.error ? (
         <ErrorNote>

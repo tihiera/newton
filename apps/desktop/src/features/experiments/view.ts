@@ -223,3 +223,39 @@ export function memoryConflict(err: unknown): MemoryConflict | null {
     researchItemId: id("research_item_id"),
   };
 }
+
+/** "This paper's scheme vs upwind" / "lax_wendroff, muscl_vanleer vs upwind". */
+export function comparisonLine(exp: Experiment): string {
+  const variants = exp.spec?.variants ?? [];
+  const baseline = variants.find((v) => v.role === "baseline")?.label;
+  const candidates = variants.filter((v) => v.role === "candidate").map((v) => v.label);
+  const subject = exp.research_item_id ? "This paper's scheme" : candidates.join(", ") || exp.title;
+  return baseline ? `${subject} vs ${baseline}` : subject;
+}
+
+/** A metric shown big: 2 significant digits for small errors (2.7e-3), else 3. */
+export function metricNumber(x: unknown): string {
+  if (typeof x !== "number" || !Number.isFinite(x)) return x === null || x === undefined ? "—" : String(x);
+  if (x !== 0 && Math.abs(x) < 0.01) return x.toExponential(1);
+  return Number(x.toPrecision(3)).toString();
+}
+
+/** The result in one plain sentence, from the report's own numbers. */
+export function plainResult(report: ValidationReport, verdict?: CandidateVerdict): string {
+  const cand = candidateOf(report, verdict);
+  const base = baselineOf(report);
+  const parts: string[] = [];
+  const co = cand?.metrics.observed_order;
+  const bo = base?.metrics.observed_order;
+  if (typeof co === "number" && typeof bo === "number") parts.push(`order ${metricNumber(co)} vs ${metricNumber(bo)}`);
+  const ce = cand?.metrics.l2_error;
+  const be = base?.metrics.l2_error;
+  if (typeof ce === "number" && typeof be === "number" && ce > 0) {
+    const ratio = be / ce;
+    parts.push(ratio >= 1 ? `error ${Math.round(ratio)}× lower` : `error ${Math.round(1 / ratio)}× higher`);
+  }
+  const failed = (cand?.assumptions ?? []).filter((a) => a.holds === false).map((a) => claimLabel(a.claim));
+  let line = parts.length ? `${parts.join(", ")} than ${base?.label ?? "the baseline"}` : "";
+  if (failed.length) line += `${line ? "; " : ""}${failed.join(", ")} claim did not hold`;
+  return line ? line.charAt(0).toUpperCase() + line.slice(1) + "." : "";
+}

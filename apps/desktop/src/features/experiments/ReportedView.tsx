@@ -9,7 +9,7 @@ import { ConvergencePanel } from "./ConvergencePanel";
 import { MetricTiles } from "./MetricTiles";
 import { Provenance } from "./Provenance";
 import { Verdicts } from "./Verdicts";
-import { headline, leadVerdict } from "./view";
+import { headline, leadVerdict, plainResult } from "./view";
 
 export function ReportedView({ exp, report, next }: { exp: Experiment; report: ValidationReport; next?: ReactNode }) {
   const evidence = report.evidence ?? exp.evidence ?? "unknown";
@@ -22,7 +22,7 @@ export function ReportedView({ exp, report, next }: { exp: Experiment; report: V
         </span>
         <div style={{ minWidth: 0 }}>
           <div className="banner-title">{headline(evidence, verdict)}</div>
-          <div className="ex-banner-summary">{report.summary}</div>
+          <div className="ex-banner-summary">{plainResult(report, verdict) || report.summary}</div>
         </div>
       </div>
       <MetricTiles report={report} verdict={verdict} />
