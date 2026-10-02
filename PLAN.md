@@ -35,12 +35,13 @@ Every milestone ends with `scripts/test.sh` green and STATUS.md updated.
 | B5 | Research loop | goals poll arXiv, triage, card, propose (approval-gated), dedup by method, findings as scientific memory; live poll on today's arXiv |
 | B6 | Publishing | GitHub gist / issue and Notion page, every one approved, exactly the approved text sent, tokens in the Keychain |
 | U1 | Desktop UI | Tauri v2 + React 19 from the user's design: sidebar, paper inbox, research workspace, paper tabs, propose → review → approve → jobs/logs → evidence, publish via approval, compute (host-key trust), models, settings, approvals; no business logic in React; live against agentd on this Mac |
+| U2 | UI gaps closed | journal names, New experiment with scientific memory (409 + retest), Notion page picker, report export (zip), Tauri opener (scoped) and save dialog, keyword errors on their field, papers cut to the reader's context, ESLint + Prettier; live on this Mac |
 
 ## Next
 
 | # | ID | Step | What gets built | Done when |
 |---|---|---|---|---|
-| 9 | U2 | **Library, evidence board, research diary** | built with U1 from the design (all papers, evidence from the ValidationReport, research timeline); left: see STATUS "Known gaps (UI)" | the gaps are closed or accepted |
+| 10 | B7 | **Demo hardening** | offline/degraded modes, signed build | a demo runs from a clean Mac |
 
 ## Then: using the Mac and the GB10 together (before paper ingestion)
 
@@ -56,6 +57,5 @@ All of these are done (SV0–SV4, E2): see Done.
 
 | ID | Milestone |
 |---|---|
-| B7 | Demo hardening, offline/degraded modes, signed build |
 | — | Remote Mac mini as an SSH worker (bootstrap Darwin branch, Python ≥3.10 selection) |
 | E4 | Optional, needs a SPEC decision: agent-drafted CUDA/Metal kernels shown as a diff for approval, pinned by sha256, compiled and run only inside a sandbox on the Spark |

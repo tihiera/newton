@@ -4,12 +4,11 @@ _Last updated: 2026-10-02_
 
 ## Current milestone
 
-**U1 done** (2026-10-02): the Newton desktop UI from the user's design, live against
-agentd on this Mac. The whole core flow runs from the UI: research created, arXiv
-polled, papers carded, a paper mapped onto the IR, experiment proposed, reviewed,
-approved, run, evidence shown, publication requested and rejected through approval.
-SV4, E2, B4, B5 and B6 were done before. Next: **U2** (close the UI gaps below) and
-**B7** (demo hardening).
+**U1 and U2 done** (2026-10-02): the Newton desktop UI from the user's design, live
+against agentd on this Mac and the GB10, and the UI gaps closed (U2): journal names,
+New experiment on a reported paper with scientific memory, Notion page picker, report
+export, scoped external links, keyword errors on their field, papers read within the
+reader's context, ESLint + Prettier. Next: **B7** (demo hardening).
 
 ## Decisions
 
@@ -488,6 +487,31 @@ SV4, E2, B4, B5 and B6 were done before. Next: **U2** (close the UI gaps below) 
   - **Evidence:** a result that ran on the wrong backend is red, and reports show
     the device per variant.
 
+## Verification (2026-10-02, U2 UI gaps)
+
+- **Built** as 6 units in parallel (2 backend, 4 desktop) with disjoint files against a
+  fixed API contract; each unit reviewed on 2 lenses, each finding verified by a skeptic,
+  then fixed: 15 confirmed and fixed, 1 rejected. An integration review (hooks,
+  backend flow, UI contract) confirmed 4 more, all fixed with tests.
+- **Live** (browser UI against agentd):
+  - arXiv:2512.08611 read by llama3.2:3b with the **8k** context that failed before:
+    17,274 characters sent (`context_length` 8192 in provenance), carded; header and
+    inbox show "Journal of Computational Physics, Volume 563…", DOI linked.
+  - New experiment on the reported arXiv:1101.4315: agentd's 409 shown verbatim ("the
+    same scheme was tested in exp-69913f5cbd13 (yellow)"), Propose anyway → MUSCL·van
+    Leer baseline, approved, ran on This Mac (order 2.00 vs 1.78, L2 ratio 0.425):
+    the paper went back to reported with a third finding; Earlier experiments lists
+    the first.
+  - Export: a zip with report.md, report.json and the 5 plots.
+  - "(evil)" keyword: the error shows under Keywords, naming the item.
+  - Polling unchanged after the hook rewrites (0 requests hidden, drawer polls stop),
+    no stale paper on a switch, job and service logs tail without duplicates.
+- **Not exercised live:** the Notion page list (needs the user's Notion token; unit
+  tested with a mocked Notion), the native save dialog and opener in the Tauri window
+  (compiled, clippy clean, Rust and TS unit tests; the browser fallbacks ran live).
+- `scripts/test.sh` (now with desktop format + lint): 530 pytest pass, 11 skipped;
+  111 vitest pass; 13 cargo tests pass; ruff, mypy, contracts clean.
+
 ## Verification (2026-10-02, U1 desktop UI)
 
 Driven through the UI in a browser against live agentd (`pnpm dev:web`, headless
@@ -643,19 +667,12 @@ Chrome, screenshots in the session scratchpad):
 
 ## Known gaps (UI)
 
-- No linter or formatter is configured for `apps/desktop` (only tsc).
-- 422 errors on list items (`keywords.1`) can't be attached to one input: shown under
-  the form.
-- No journal name for papers (author/category · year), no Notion page picker (an id is
-  typed), no Export button, no "New experiment" once a paper has one (agentd proposes
-  once per paper).
-- arXiv links open with a plain `<a target=_blank>`; the Tauri shell may need the opener
-  plugin.
-- Proposing by hand skips scientific memory: two papers that map onto the same scheme
-  (`method_digest` equal) both ran (arXiv:1101.4315 and 1802.04363). Only the research
-  loop's auto-propose checks `already_tested`; the propose route should say so too.
-- Failed papers can be read again (agentd retries on a re-ingest); a context that is
-  too small for the reader shows only as "not valid JSON".
+- Links outside the opener allowlist (arxiv.org, doi.org, github.com, gist.github.com,
+  notion.so) don't open in the Tauri window: the address is shown to copy instead.
+- The Notion page picker and the native save dialog haven't run against a real Notion
+  workspace / in the Tauri window yet (see Verification).
+- A paper's state follows a rejected or cancelled experiment at once; a failed one on
+  the loop's next pass (≤ 60 s).
 
 ## Known gaps
 
@@ -692,6 +709,6 @@ Chrome, screenshots in the session scratchpad):
 
 ## Next action
 
-U2: close the UI gaps above. B7 (demo hardening, offline modes, signed build). A bigger
+B7 (demo hardening, offline modes, signed build). A bigger
 reading model with a 16k+ context (qwen2.5:7b or larger on the GB10) will read papers
 better than llama3.2:3b.
