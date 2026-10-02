@@ -131,6 +131,7 @@ class ServiceManager:
         self._connect_failures: dict[str, int] = {}
         self._reachable: dict[str, bool] = {}
         self._progress: dict[str, dict[str, Any]] = {}  # service_id -> download progress
+        self._model_context: dict[str, int] = {}  # service_id -> the model's trained context
         self._forward_denied: set[str] = set()
         self._tasks: set[asyncio.Task[None]] = set()
         self._busy: set[str] = set()
@@ -151,6 +152,22 @@ class ServiceManager:
         if row is None:
             raise ServiceNotFound(service_id)
         return row
+
+    def note_model_context(self, service_id: str, trained: int) -> None:
+        """The model's trained context, learned by asking its engine (see Router)."""
+        if trained > 0:
+            self._model_context[service_id] = trained
+
+    def knows_model_context(self, service_id: str) -> bool:
+        return service_id in self._model_context
+
+    def context_limit(self, service_id: str, declared: int | None) -> int | None:
+        """The context a prompt really gets: the service's, or less when the model was
+        trained with less (Ollama then drops the start of a longer prompt)."""
+        trained = self._model_context.get(service_id)
+        if declared and trained:
+            return min(declared, trained)
+        return declared or trained
 
     def _progress_from(self, service_id: str, raw: Any) -> None:
         """The worker's download progress ({phase, completed, total} bytes), kept in
@@ -539,6 +556,9 @@ class ServiceManager:
             return False
         self.hosts.note_reachability(row["host_id"], None)
         self._progress_from(row["id"], remote.get("progress"))
+        trained = remote.get("model_context")
+        if isinstance(trained, int) and trained > 0:
+            self._model_context[row["id"]] = trained
         ours: str = FROM_WORKER.get(str(remote.get("state"))) or str(row["state"])
         fields: dict[str, Any] = {
             "remote_state": remote.get("state"),

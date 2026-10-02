@@ -336,6 +336,23 @@ class Supervisor:
             self.http, "POST", "/api/generate", {"model": model, "keep_alive": -1},
             timeout=remaining,
         )  # fmt: skip
+        # The context the model was trained with: Ollama silently drops the start of a
+        # longer prompt (the instructions), so agentd sizes prompts to the smaller one.
+        trained = self.trained_context(model)
+        if trained:
+            self.update(model_context=trained)
+
+    def trained_context(self, model: str) -> Optional[int]:
+        """`<architecture>.context_length` from Ollama's /api/show, or None."""
+        try:
+            info = self.http("POST", "/api/show", {"model": model}, timeout=30)
+        except (OSError, urllib.error.URLError, ValueError):
+            return None
+        details = info.get("model_info") if isinstance(info, dict) else None
+        for key, value in (details or {}).items():
+            if key.endswith(".context_length") and isinstance(value, int) and value > 0:
+                return value
+        return None
 
     def reuse_local(self) -> None:
         """The host's own Ollama already has this model at the pinned revision: hard-link

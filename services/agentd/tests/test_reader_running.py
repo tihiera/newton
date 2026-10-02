@@ -96,3 +96,12 @@ def test_papers_the_reader_answered_badly_are_read_again_once(
     assert item["state"] == "dismissed" and item["data"]["reread"] == 1
     client.post(f"/goals/{gid}/poll")
     assert read == ["2609.00003"]  # once: a paper that fails again stays as it is
+
+
+def test_a_prompt_gets_the_models_own_context_when_it_is_smaller(client: TestClient) -> None:
+    services = ctx_of(client).services
+    assert services.context_limit("svc-x", 8192) == 8192  # not known yet: the setting
+    services.note_model_context("svc-x", 4096)  # e.g. nemotron-mini: trained with 4096
+    assert services.context_limit("svc-x", 8192) == 4096
+    assert services.context_limit("svc-x", 2048) == 2048
+    assert services.context_limit("svc-x", None) == 4096

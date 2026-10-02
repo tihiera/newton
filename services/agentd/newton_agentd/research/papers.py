@@ -541,6 +541,9 @@ class Papers:
         head = f"Title: {meta['title']}\n\nAbstract: {meta['abstract']}\n\nPaper:\n"
         # The paper is cut to the reader's context: a prompt longer than the context is
         # truncated by the engine (or refused), and the card comes back cut, or empty.
+        learn = getattr(self.router, "learn_context", None)
+        if learn is not None:  # the model's own limit can be below the service's setting
+            await learn(model)
         context = self.router.context_length(model)
         budget = text_budget(context, len(prompt) + len(head))
         if budget < min(MIN_TEXT, len(text)):

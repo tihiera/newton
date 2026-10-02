@@ -360,7 +360,7 @@ async def create_goal(request: Request, body: GoalCreate) -> dict[str, Any]:
             },
         )
         record_event(db, "goal", goal_id, "created", {"title": body.title})
-        if suggested:
+        if suggested and body.keywords:  # only when the topic gave some
             record_event(db, "goal", goal_id, "keywords",
                          {"keywords": body.keywords, "source": suggested})  # fmt: skip
     return await get_goal(request, goal_id)

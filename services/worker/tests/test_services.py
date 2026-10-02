@@ -357,7 +357,8 @@ def test_ollama_model_is_pulled_checked_and_made_resident(tmp_path: Path) -> Non
     api = FakeOllamaAPI(digest="a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72")
     sup = ollama_supervisor(tmp_path, api.port, "a80c4f17acd5")
     sup.prepare(time.time() + 30)
-    assert api.calls == ["POST /api/pull", "GET /api/tags", "POST /api/generate"]
+    # Loaded, then asked for the context the model was trained with.
+    assert api.calls == ["POST /api/pull", "GET /api/tags", "POST /api/generate", "POST /api/show"]
     api.server.shutdown()
 
 
@@ -684,8 +685,9 @@ def test_ollama_service_end_to_end_with_a_stub_engine(
     ready = wait_state(store, store.create(OLLAMA_SPEC)["service_id"], ("ready",))
     assert ready["healthy"] is True
     log = calls.read_text().splitlines()
-    assert log[0].startswith("/api/pull") and log[-1].startswith("/api/generate")
-    assert json.loads(log[-1].split(" ", 1)[1])["keep_alive"] == -1  # resident until stopped
+    assert log[0].startswith("/api/pull") and log[-2].startswith("/api/generate")
+    assert log[-1].startswith("/api/show")  # the model's trained context
+    assert json.loads(log[-2].split(" ", 1)[1])["keep_alive"] == -1  # resident until stopped
 
 
 @pytest.mark.usefixtures("plenty_of_memory")

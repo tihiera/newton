@@ -276,7 +276,7 @@ class Router:
                 model=spec["model"], revision=spec.get("revision"),
                 base_url=f"http://127.0.0.1:{row['local_port']}/v1",
                 parallel=int(spec.get("parallel") or 1), key_ref=row["api_key_ref"],
-                context_length=spec.get("context_length"),
+                context_length=self.services.context_limit(row["id"], spec.get("context_length")),
             ))  # fmt: skip
         return out
 
@@ -329,6 +329,33 @@ class Router:
         pinned, rev = same[0]["model"], same[0].get("revision")
         return name, f"model:{pinned}@{rev}", lambda e: e.model == pinned and e.revision == rev
 
+    async def learn_context(self, requested: str) -> None:
+        """Ask the Ollama services serving this model for the context their model was
+        trained with (/api/show), once each: the service's own setting can be larger,
+        and Ollama then drops the start of a longer prompt."""
+        try:
+            _, _, serves = self.resolve(requested)
+        except RouterError:
+            return
+        for e in self.endpoints():
+            if (
+                e.engine != "ollama"
+                or not serves(e)
+                or self.services.knows_model_context(e.service_id)
+            ):
+                continue
+            try:
+                resp = await self.client().post(
+                    e.base_url[: -len("/v1")] + "/api/show", json={"model": e.model}, timeout=15
+                )
+                info = resp.json().get("model_info") or {}
+            except (httpx.HTTPError, ValueError, AttributeError):
+                continue
+            for key, value in info.items():
+                if key.endswith(".context_length") and isinstance(value, int):
+                    self.services.note_model_context(e.service_id, value)
+                    break
+
     def context_length(self, requested: str) -> int | None:
         """The context the model is served with: the smallest among the ready services
         serving it (a request may land on any), else among those that may soon serve
@@ -339,8 +366,9 @@ class Router:
             return None
         lengths = [e.context_length for e in self.endpoints() if serves(e) and e.context_length]
         if not lengths:
-            lengths = [k["context_length"] for k in self._known()
-                       if serves(_as_endpoint(k)) and k.get("context_length")]  # fmt: skip
+            lengths = [n for k in self._known() if serves(_as_endpoint(k))
+                       for n in [self.services.context_limit(k["id"], k.get("context_length"))]
+                       if n]  # fmt: skip
         return min(lengths) if lengths else None
 
     def _refuse_if_paused(self, serves: Callable[[Endpoint], bool]) -> None:

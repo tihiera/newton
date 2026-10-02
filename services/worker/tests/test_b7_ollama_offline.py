@@ -100,7 +100,8 @@ def test_a_stored_pinned_model_starts_without_pulling(
     servers.append(api)
     supervisor(tmp_path, api, stored=True).prepare(time.time() + 30)
     # Checked against the pinned digest locally, then loaded: nothing downloaded.
-    assert api.calls == ["GET /api/tags", "POST /api/generate"]
+    # No pull: the stored model is loaded, then asked for its trained context.
+    assert api.calls == ["GET /api/tags", "POST /api/generate", "POST /api/show"]
 
 
 def test_a_stored_model_at_another_digest_is_pulled(
@@ -172,3 +173,17 @@ def test_a_pull_reports_its_progress(tmp_path: Path, servers: list[OfflineOllama
     assert seen[0] == {"phase": "downloading", "completed": 250, "total": 1000}  # first step
     assert seen[-1] is None  # cleared once the pull is over
     assert json.loads((sup.dir / "status.json").read_text()).get("progress") is None
+
+
+def test_the_models_trained_context_is_read_from_ollama(
+    tmp_path: Path, servers: list[OfflineOllama]
+) -> None:
+    api = OfflineOllama(digest=DIGEST)
+    servers.append(api)
+    sup = supervisor(tmp_path, api, stored=True)
+    answers = {"/api/show": {"model_info": {"general.architecture": "nemotron",
+                                            "nemotron.context_length": 4096}}}  # fmt: skip
+    sup.http = lambda method, path, body=None, timeout=5.0: answers.get(path, {})  # type: ignore[method-assign]
+    assert sup.trained_context("nemotron-mini:4b") == 4096
+    answers["/api/show"] = {"model_info": {}}
+    assert sup.trained_context("nemotron-mini:4b") is None
