@@ -76,7 +76,8 @@ export function NewServiceForm({
       parallel: numberOrUndefined(form.parallel),
     };
     for (const k of Object.keys(settings)) if (settings[k] === undefined) delete settings[k];
-    const service = await api.services.create({ host_id: hostId, name: form.name.trim(), settings });
+    const name = form.name.trim() || serviceName(form.model.trim());
+    const service = await api.services.create({ host_id: hostId, name, settings });
     let approval: Approval | null = null;
     if (service.state === "awaiting_approval") {
       const pending = await api.approvals.pending();
@@ -89,6 +90,8 @@ export function NewServiceForm({
   const err = create.error;
   const fe = (name: string) => fieldError(err, name);
   // A 422 about something without its own input (or a 409/400) shows as one sentence.
+  // Advanced opens by itself when one of its fields was refused.
+  const advancedError = ["engine", "revision", "name", "memory_gb", "context_length", "parallel"].some((k) => fe(k));
   const otherError =
     Boolean(err) && (!Object.keys(create.fields).length || Object.keys(create.fields).some((k) => !(k in EMPTY)));
 
@@ -148,116 +151,107 @@ export function NewServiceForm({
       }}
     >
       <div className="card-head">
-        <span className="icon-tile blush" style={{ width: 40, height: 40, borderRadius: 12 }}>
-          <Icon name="model" size={20} />
-        </span>
         <div className="h-card" style={{ flex: 1 }}>
-          New model service
+          New service
         </div>
         <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
           <Icon name="x" size={18} />
         </button>
       </div>
-      <div className="form-grid">
-        <Field label="Machine" error={fe("host_id")}>
-          <select className="select" value={hostId} onChange={set("host_id")}>
-            {(hosts ?? []).map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <div className="span-2">
-          <Field label="Choose a model">
-            <ModelChoices
-              hostId={hostId}
-              hostName={hostName}
-              selected={`${form.model}@${form.revision}`}
-              onPick={pick}
-              autoPick={initialModel}
-            />
-          </Field>
-          <div className="small muted" style={{ marginTop: 6 }}>
-            Or type it:
-          </div>
-        </div>
-        <Field label="Name" error={fe("name")}>
-          <input
-            className={`input ${fe("name") ? "invalid" : ""}`}
-            value={form.name}
-            onChange={set("name")}
-            placeholder="reader"
-          />
-        </Field>
-        <Field label="Engine" error={fe("engine")}>
-          <select className="select" value={form.engine} onChange={set("engine")}>
-            {ENGINES.map((e) => (
-              <option key={e} value={e}>
-                {e}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Model" error={fe("model")}>
-          <input
-            className={`input ${fe("model") ? "invalid" : ""}`}
-            value={form.model}
-            onChange={set("model")}
-            placeholder="llama3.2:3b"
-            spellCheck={false}
-          />
-        </Field>
-        <div className="span-2">
-          <Field
-            label="Revision (pinned)"
-            error={fe("revision")}
-            hint="Required: the Ollama manifest digest, or the 40-hex commit for vLLM and MLX."
-          >
+      <Field label="Machine" error={fe("host_id")}>
+        <select className="select" value={hostId} onChange={set("host_id")}>
+          {(hosts ?? []).map((h) => (
+            <option key={h.id} value={h.id}>
+              {h.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Model" error={fe("model") ?? fe("revision")}>
+        <ModelChoices
+          hostId={hostId}
+          hostName={hostName}
+          selected={`${form.model}@${form.revision}`}
+          onPick={pick}
+          autoPick={initialModel}
+        />
+      </Field>
+
+      <details className="new-service-advanced" open={advancedError || undefined}>
+        <summary className="small muted">Advanced</summary>
+        <div className="form-grid" style={{ marginTop: 10 }}>
+          <Field label="Model" error={fe("model")}>
             <input
-              className={`input mono ${fe("revision") ? "invalid" : ""}`}
-              value={form.revision}
-              onChange={set("revision")}
+              className={`input ${fe("model") ? "invalid" : ""}`}
+              value={form.model}
+              onChange={set("model")}
+              placeholder="llama3.2:3b"
               spellCheck={false}
             />
           </Field>
+          <Field label="Engine" error={fe("engine")}>
+            <select className="select" value={form.engine} onChange={set("engine")}>
+              {ENGINES.map((e) => (
+                <option key={e} value={e}>
+                  {e}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <div className="span-2">
+            <Field label="Revision (pinned)" error={fe("revision")}>
+              <input
+                className={`input mono ${fe("revision") ? "invalid" : ""}`}
+                value={form.revision}
+                onChange={set("revision")}
+                spellCheck={false}
+              />
+            </Field>
+          </div>
+          <Field label="Name" error={fe("name")}>
+            <input
+              className={`input ${fe("name") ? "invalid" : ""}`}
+              value={form.name}
+              onChange={set("name")}
+              placeholder={form.model ? serviceName(form.model) : "reader"}
+            />
+          </Field>
+          <Field label="Memory (GB)" error={fe("memory_gb")}>
+            <input
+              className={`input ${fe("memory_gb") ? "invalid" : ""}`}
+              type="number"
+              step="any"
+              min={0}
+              value={form.memory_gb}
+              onChange={set("memory_gb")}
+            />
+          </Field>
+          <Field label="Context length" error={fe("context_length")}>
+            <input
+              className={`input ${fe("context_length") ? "invalid" : ""}`}
+              type="number"
+              min={0}
+              value={form.context_length}
+              onChange={set("context_length")}
+            />
+          </Field>
+          <Field label="Parallel requests" error={fe("parallel")}>
+            <input
+              className={`input ${fe("parallel") ? "invalid" : ""}`}
+              type="number"
+              min={1}
+              value={form.parallel}
+              onChange={set("parallel")}
+            />
+          </Field>
         </div>
-        <Field label="Memory (GB)" error={fe("memory_gb")}>
-          <input
-            className={`input ${fe("memory_gb") ? "invalid" : ""}`}
-            type="number"
-            step="any"
-            min={0}
-            value={form.memory_gb}
-            onChange={set("memory_gb")}
-          />
-        </Field>
-        <Field label="Context length" error={fe("context_length")} hint="Empty: agentd's default">
-          <input
-            className={`input ${fe("context_length") ? "invalid" : ""}`}
-            type="number"
-            min={0}
-            value={form.context_length}
-            onChange={set("context_length")}
-          />
-        </Field>
-        <Field label="Parallel requests" error={fe("parallel")} hint="Empty: agentd's default">
-          <input
-            className={`input ${fe("parallel") ? "invalid" : ""}`}
-            type="number"
-            min={1}
-            value={form.parallel}
-            onChange={set("parallel")}
-          />
-        </Field>
-      </div>
+      </details>
       {otherError ? <ErrorNote error={err} /> : null}
       <div className="row" style={{ marginTop: 6 }}>
-        <button className="btn primary" type="submit" disabled={create.busy || !hostId}>
+        <button className="btn primary" type="submit" disabled={create.busy || !hostId || !form.model.trim()}>
           {create.busy ? <Spinner /> : null}
-          Create service
+          Start
         </button>
-        <span className="small muted">Downloads need your approval first.</span>
       </div>
     </form>
   );

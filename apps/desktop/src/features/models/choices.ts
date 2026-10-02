@@ -3,7 +3,6 @@
 // is present, reusable or pinned.
 
 import type { CatalogModel, MachineModel } from "../../api";
-import { bytes } from "../../components/time";
 
 /** What picking a model fills in the "new model service" form. */
 export interface ModelPick {
@@ -15,16 +14,6 @@ export interface ModelPick {
 
 export function pickOf(m: MachineModel | CatalogModel): ModelPick {
   return { engine: m.engine, model: m.model, revision: m.revision, memory_gb: m.memory_gb_hint };
-}
-
-/** The line under a model already on a machine. */
-export function machineLine(m: MachineModel): string {
-  const size = bytes(m.size_bytes);
-  if (m.where === "newton") return `${size} · ready, no download`;
-  if (m.ready) return `${size} · in Ollama on this machine, reused (no download)`;
-  return m.where === "ollama"
-    ? `${size} · in Ollama on this machine; Newton downloads its own copy`
-    : `${size} · in the Hugging Face cache; Newton downloads its own copy`;
 }
 
 /** Catalog entries not already listed for the machine (same model and revision). */

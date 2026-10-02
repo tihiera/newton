@@ -1,11 +1,9 @@
-// Settings: the profile, the Mac models switch, GitHub / Notion connections and the
-// router key for other tools.
+// Settings: the profile, the Mac models switch and GitHub / Notion connections.
 
 import { useProfile } from "../../app/data";
 import { ErrorNote, Modal } from "../../components/ui";
 import { ConnectionsSection } from "./Connections";
 import { MacModelsSection, ProfileSection } from "./ProfileSection";
-import { RouterAccess } from "./RouterAccess";
 import "./settings.css";
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
@@ -27,9 +25,6 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
         <h3 className="h-section settings-heading">Connections</h3>
         <ConnectionsSection />
-
-        <h3 className="h-section settings-heading">Router access for tools</h3>
-        <RouterAccess />
       </div>
       <div className="modal-foot">
         <span className="spacer" />

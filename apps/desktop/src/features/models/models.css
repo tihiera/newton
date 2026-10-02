@@ -71,42 +71,6 @@
 .form-grid .span-2 {
   grid-column: span 2;
 }
-.lease {
-  align-items: flex-start;
-}
-.request-table-wrap {
-  overflow-x: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.85);
-  padding: 6px 10px;
-}
-.request-table {
-  width: 100%;
-  overflow-wrap: anywhere;
-  border-collapse: collapse;
-  font-size: 12.5px;
-}
-.request-table th {
-  text-align: left;
-  font-weight: 520;
-  color: var(--muted);
-  padding: 8px 6px;
-}
-.request-table td {
-  border-top: 1px solid var(--border);
-  padding: 8px 6px;
-  vertical-align: middle;
-}
-.request-table .num {
-  text-align: right;
-}
-.request-table .nowrap {
-  white-space: nowrap;
-}
-.request-table .mono {
-  font-size: 11.5px;
-}
 
 /* Shared with the compute drawer's look (ghost action row, confirm boxes). */
 .models .host-actions {
@@ -137,29 +101,28 @@
   background: var(--surface-sunken);
 }
 
-/* "Choose a model": the machine's models, then the catalog; one click fills the form. */
+/* "Choose a model": one list, ready models first, then downloads with their size. */
 .model-choices {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 .model-choice-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
-  gap: 8px;
-  max-height: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 280px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 2px;
 }
 .model-choice {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
   text-align: left;
-  padding: 10px 12px;
-  border-radius: var(--radius);
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.85);
   cursor: pointer;
@@ -168,10 +131,26 @@
 .model-choice:hover {
   border-color: var(--border-strong);
 }
-.model-choice.selected {
-  border-color: var(--lavender, #b9a7f0);
-}
 .model-choice-name {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+.model-choice-tag {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+.model-choice-tag.ready {
+  color: var(--green);
+}
+.service-model-name {
+  font-size: 14px;
+  font-weight: 520;
+  overflow-wrap: anywhere;
+}
+.models-stopped-toggle {
+  align-self: flex-start;
+  margin-top: 6px;
 }

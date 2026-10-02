@@ -1,5 +1,5 @@
-// The "Models" drawer: the reader model, the model services on each machine, the
-// router (what is in flight, what a timed run has paused) and its request log.
+// The "Models" drawer, kept simple: the reader model and the model services (running
+// ones first; stopped ones behind a toggle).
 
 import { useState } from "react";
 import { useHosts, useProfile, useRouterStatus, useServices } from "../../app/data";
@@ -7,9 +7,7 @@ import { Icon } from "../../components/Icon";
 import { Drawer, Empty, ErrorNote, Spinner } from "../../components/ui";
 import { NewServiceForm } from "./NewServiceForm";
 import { ReaderModel } from "./ReaderModel";
-import { RequestLog } from "./RequestLog";
-import { RouterPanel } from "./RouterPanel";
-import { ServiceCard } from "./ServiceCard";
+import { ENDED_SERVICE, ServiceCard } from "./ServiceCard";
 import "./models.css";
 
 export function ModelsDrawer({ onClose }: { onClose: () => void }) {
@@ -20,7 +18,10 @@ export function ModelsDrawer({ onClose }: { onClose: () => void }) {
   const [adding, setAdding] = useState(false);
   // The reader's "Start it": the form opens with that model picked.
   const [startModel, setStartModel] = useState<string | undefined>(undefined);
-  const list = services.data ?? [];
+  const [showStopped, setShowStopped] = useState(false);
+  const all = services.data ?? [];
+  const running = all.filter((s) => !ENDED_SERVICE.has(s.state));
+  const stopped = all.filter((s) => ENDED_SERVICE.has(s.state));
 
   return (
     <Drawer
@@ -76,28 +77,31 @@ export function ModelsDrawer({ onClose }: { onClose: () => void }) {
             <Spinner /> Loading services…
           </div>
         ) : null}
-        {services.data && list.length === 0 && !adding ? (
-          <Empty title="No model services" icon="model">
-            Serve a model on a machine to read papers with it. Everything goes through Newton's router.
+        {services.data && running.length === 0 && !adding ? (
+          <Empty title="No model running" icon="model">
+            Start one with New service.
           </Empty>
         ) : null}
-        <div className="stack" style={{ gap: 14 }}>
-          {list.map((s) => (
-            <ServiceCard
-              key={s.id}
-              service={s}
-              hosts={hosts.data}
-              routes={router.data?.models}
-              refresh={services.refresh}
-            />
+        <div className="stack" style={{ gap: 10 }}>
+          {running.map((s) => (
+            <ServiceCard key={s.id} service={s} hosts={hosts.data} refresh={services.refresh} />
           ))}
         </div>
-
-        <h3 className="h-section models-heading">Router</h3>
-        <RouterPanel status={router.data} error={router.error} hosts={hosts.data} />
-
-        <h3 className="h-section models-heading">Recent requests</h3>
-        <RequestLog hosts={hosts.data} />
+        {stopped.length ? (
+          <>
+            <button className="btn ghost small-link models-stopped-toggle" onClick={() => setShowStopped(!showStopped)}>
+              <Icon name={showStopped ? "chevronDown" : "chevronRight"} size={14} />
+              Stopped ({stopped.length})
+            </button>
+            {showStopped ? (
+              <div className="stack" style={{ gap: 10 }}>
+                {stopped.map((s) => (
+                  <ServiceCard key={s.id} service={s} hosts={hosts.data} refresh={services.refresh} />
+                ))}
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </div>
     </Drawer>
   );

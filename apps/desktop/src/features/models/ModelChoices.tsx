@@ -6,7 +6,7 @@ import { api, type CatalogModel, type MachineModel } from "../../api";
 import { usePolling } from "../../hooks/usePolling";
 import { bytes } from "../../components/time";
 import { ErrorNote, Spinner } from "../../components/ui";
-import { catalogNotOnMachine, findPick, machineLine, pickOf, type ModelPick } from "./choices";
+import { catalogNotOnMachine, findPick, pickOf, type ModelPick } from "./choices";
 
 export function ModelChoices({
   hostId,
@@ -40,41 +40,39 @@ export function ModelChoices({
     if (p) onPick(p);
   }, [autoPick, onMachine.data, catalog.data, onPick]);
 
-  const option = (m: MachineModel | CatalogModel, line: string) => {
+  // One list: what starts right away first, then what needs a download (with its size).
+  const ready = here.filter((m) => m.where === "newton" || m.ready);
+  const toDownload = [...here.filter((m) => !(m.where === "newton" || m.ready)), ...download];
+  const option = (m: MachineModel | CatalogModel, tag: string, tone: "ready" | "download") => {
     const key = `${m.model}@${m.revision}`;
     return (
       <button
         type="button"
-        key={key}
+        key={`${key}:${tone}`}
         className={`model-choice ${selected === key ? "selected mesh-selected" : ""}`}
         onClick={() => onPick(pickOf(m))}
         aria-pressed={selected === key}
       >
         <span className="model-choice-name mono">{m.model}</span>
-        <span className="small muted">{line}</span>
+        <span className={`model-choice-tag ${tone}`}>{tag}</span>
       </button>
     );
   };
 
   return (
     <div className="model-choices">
-      <div className="small muted">On {hostName}</div>
       {onMachine.error ? <ErrorNote error={onMachine.error} /> : null}
+      {catalog.error ? <ErrorNote error={catalog.error} /> : null}
       {!onMachine.data && !onMachine.error ? (
         <div className="row small muted">
           <Spinner /> Looking at {hostName}…
         </div>
-      ) : null}
-      {onMachine.data && !here.length ? <div className="small muted">No models on {hostName} yet.</div> : null}
-      {here.length ? <div className="model-choice-list">{here.map((m) => option(m, machineLine(m)))}</div> : null}
-
-      <div className="small muted" style={{ marginTop: 10 }}>
-        Download
-      </div>
-      {catalog.error ? <ErrorNote error={catalog.error} /> : null}
-      {download.length ? (
-        <div className="model-choice-list">{download.map((m) => option(m, `${bytes(m.size_bytes)} · ${m.note}`))}</div>
-      ) : null}
+      ) : (
+        <div className="model-choice-list">
+          {ready.map((m) => option(m, "Ready", "ready"))}
+          {toDownload.map((m) => option(m, bytes(m.size_bytes), "download"))}
+        </div>
+      )}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { api, type Host, type Profile, type RouterStatus, type Service } from "../../api";
 import { useAction } from "../../hooks/useAction";
 import { Icon } from "../../components/Icon";
-import { Chip, ErrorNote, fieldError, Spinner, Thumb } from "../../components/ui";
+import { Chip, ErrorNote, fieldError, Spinner } from "../../components/ui";
 import { DefaultModelPicker } from "./DefaultModelPicker";
 import { readerLine } from "./readerView";
 
@@ -37,9 +37,8 @@ export function ReaderModel({
   return (
     <div className="card reader-card-lg">
       <div className="row" style={{ gap: 18, flexWrap: "nowrap" }}>
-        <Thumb seed={line.model ?? "reader"} size={60} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="h-card">Reader{line.model ? <> · {line.model}</> : null}</div>
+          <div className="h-card mono">{line.model ?? "No reader yet"}</div>
           <div className="row" style={{ marginTop: 6, gap: 12 }}>
             {hostName ? (
               <span className="row small muted" style={{ gap: 6 }}>
@@ -52,7 +51,8 @@ export function ReaderModel({
             </Chip>
           </div>
         </div>
-        {!editing && line.model && line.label === "Not served" ? (
+        {/* Not running (never started, stopped or failed): one click starts it. */}
+        {!editing && line.model && (line.dot === "hollow" || line.dot === "bad") ? (
           <button className="btn primary" onClick={() => onStart(line.model ?? "")}>
             <Icon name="play" size={16} />
             Start it
@@ -70,9 +70,6 @@ export function ReaderModel({
             Change
           </button>
         ) : null}
-      </div>
-      <div className="small muted" style={{ marginTop: 12 }}>
-        The model Newton uses to read papers, and what <span className="mono">default</span> means in the router.
       </div>
       {editing ? (
         <div className="stack" style={{ marginTop: 14, gap: 10 }}>
