@@ -547,8 +547,11 @@ class Papers:
             raise PaperError(f"the model's context ({context} tokens) is too short to read a "
                              "paper: give the reader service a longer context_length")  # fmt: skip
         body = text[:budget]
+        from . import structured  # here: it reads this module's choices
+
         result = await self.router.complete({
             "model": model, "temperature": 0, "max_tokens": CARD_TOKENS,
+            "response_format": structured.response_format("paper_card", structured.CARD),
             "messages": [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": head + body},

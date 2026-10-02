@@ -13,6 +13,8 @@ import logging
 import re
 from typing import Any
 
+from . import structured
+
 log = logging.getLogger("newton_agentd.keywords")
 
 KEYWORD = re.compile(r"^[A-Za-z0-9 .+'-]{2,60}$")
@@ -100,6 +102,7 @@ async def suggest(router: Any, model: str | None, title: str, description: str
         try:
             result = await asyncio.wait_for(router.complete({
                 "model": model, "temperature": 0, "max_tokens": 200,
+                "response_format": structured.response_format("keywords", structured.KEYWORDS),
                 "messages": [{"role": "user", "content": PROMPT % {"topic": topic}}],
             }), MODEL_TIMEOUT)  # fmt: skip
             content = ((result["body"].get("choices") or [{}])[0].get("message") or {}).get(

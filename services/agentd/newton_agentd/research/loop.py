@@ -47,6 +47,7 @@ from ..runners.base import RunnerError
 from ..serving.router import RouterError
 from ..storage.db import Database, dumps, loads, new_id, now
 from . import keywords as keywords_mod
+from . import structured
 from .papers import ARXIV_API, ArxivUnreachable, PaperError, Papers, parse_feed, proposal
 
 log = logging.getLogger("newton_agentd.loop")
@@ -292,7 +293,15 @@ class ResearchLoop:
                 "SELECT 1 FROM research_items WHERE source = 'arxiv' AND external_id = ?",
                 (p["arxiv_id"],))][:MAX_NEW]  # fmt: skip
             summary["new"] = len(fresh)
-            # Papers left unread while no reader ran: read them now.
+            # Papers left unread while no reader ran, or whose reader answered in the wrong
+            # shape (before answers were held to a schema): read them now, once.
+            self.db.execute(
+                "UPDATE research_items SET state = 'discovered', data = json_set(data, "
+                "'$.error', 'triage: read again', '$.reread', 1), updated_at = ? "
+                "WHERE goal_id = ? AND state = 'failed' AND json_extract(data, '$.reread') "
+                "IS NULL AND (json_extract(data, '$.error') LIKE 'the model%' OR "
+                "json_extract(data, '$.error') LIKE 'no model service runs%')", (now(), goal_id),
+            )  # fmt: skip
             stuck = self.db.query(
                 "SELECT id, data FROM research_items WHERE goal_id = ? AND state = 'discovered' "
                 "AND json_extract(data, '$.error') LIKE 'triage:%' ORDER BY created_at LIMIT ?",
@@ -389,6 +398,7 @@ class ResearchLoop:
         goal_text = f"{goal['title']}. {goal['description']}".strip()[:1500]
         result = await self.router.complete({
             "model": model, "temperature": 0, "max_tokens": 200,
+            "response_format": structured.response_format("triage", structured.TRIAGE),
             "messages": [
                 {"role": "system", "content": TRIAGE % {"goal": goal_text}},
                 {"role": "user", "content": f"Title: {paper['title']}\n\nAbstract: "

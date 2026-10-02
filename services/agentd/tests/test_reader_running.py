@@ -64,3 +64,35 @@ def test_papers_left_unread_are_read_on_the_next_poll(
     assert summary["retried"] == 1 and read == ["2609.00002"]
     item = client.get("/research/items/paper-stuck").json()
     assert item["state"] == "dismissed" and item["data"].get("error") is None
+
+
+def test_papers_the_reader_answered_badly_are_read_again_once(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ctx = ctx_of(client)
+    ctx.papers.http_factory = Arxiv([]).factory()
+    client.patch("/profile", json={"default_model": "fake/reader"})
+    monkeypatch.setattr(ctx.loop, "_reader_down", lambda model: None)
+    limiters = {"title": "Limiters", "keywords": ["flux limiter"]}
+    gid = client.post("/goals", json=limiters).json()["id"]
+    paper = {"arxiv_id": "2609.00003", "title": "Badly read", "abstract": "A limiter.",
+             "authors": [], "published": "2026-09-30", "categories": [], "url": None}  # fmt: skip
+    ctx.db.insert("research_items", {
+        "id": "paper-bad", "goal_id": gid, "kind": "paper", "title": "Badly read",
+        "source": "arxiv", "external_id": "2609.00003", "state": "failed",
+        "data": dumps({"paper": paper, "error": "the model's answer is not valid JSON"}),
+        "created_at": now(), "updated_at": now(),
+    })  # fmt: skip
+    read: list[str] = []
+
+    async def triage(goal: Any, p: dict[str, Any], model: str) -> tuple[bool, str]:
+        read.append(p["arxiv_id"])
+        return False, "not about advection"
+
+    monkeypatch.setattr(ctx.loop, "triage", triage)
+    client.post(f"/goals/{gid}/poll")
+    assert read == ["2609.00003"]
+    item = client.get("/research/items/paper-bad").json()
+    assert item["state"] == "dismissed" and item["data"]["reread"] == 1
+    client.post(f"/goals/{gid}/poll")
+    assert read == ["2609.00003"]  # once: a paper that fails again stays as it is
