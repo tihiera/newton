@@ -321,34 +321,41 @@ def sent(router: FakeRouter) -> tuple[str, str]:
     return messages[0]["content"], messages[1]["content"]
 
 
-async def test_no_known_context_reads_as_before(client: TestClient) -> None:
+async def test_no_known_context_reads_the_paper_in_one_call(client: TestClient) -> None:
     router = FakeRouter(None)
     card, prov = await reader_with(client, router).extract(META, TEXT, "fake/reader")
     assert card["method"]["limiter"] == "koren" and router.asked == ["fake/reader"]
-    assert len(TEXT) > papers.TEXT_FOR_MODEL
-    assert prov["characters_read"] == papers.TEXT_FOR_MODEL
-    assert sent(router)[1].endswith(TEXT[: papers.TEXT_FOR_MODEL])
+    assert len(router.payloads) == 1 and sent(router)[1].endswith(TEXT)
+    assert prov["characters_read"] == len(TEXT) and "read_in_parts" not in prov
     assert "context_length" not in prov
     assert router.payloads[-1]["max_tokens"] == papers.CARD_TOKENS
 
 
-async def test_the_paper_is_cut_to_fit_a_small_context(client: TestClient) -> None:
+async def test_a_paper_longer_than_the_context_is_read_in_parts(client: TestClient) -> None:
     router = FakeRouter(4096)
     card, prov = await reader_with(client, router).extract(META, TEXT, "fake/reader")
-    system, user = sent(router)
-    read = prov["characters_read"]
-    assert 1000 < read < papers.TEXT_FOR_MODEL and user.endswith(TEXT[:read])
-    assert TEXT[: read + 1] not in user
-    estimated = (len(system) + len(user)) / papers.CHARS_PER_TOKEN + papers.CARD_TOKENS
-    assert estimated <= 4096 - papers.CONTEXT_MARGIN
+    *notes_calls, card_call = router.payloads
+    assert len(notes_calls) == prov["read_in_parts"] > 1 and card["method"]["limiter"] == "koren"
+    for payload in router.payloads:  # every call fits the context, with room to spare
+        chars = sum(len(m["content"]) for m in payload["messages"])
+        assert chars / papers.CHARS_PER_TOKEN + payload["max_tokens"] <= 4096
+    seen = "".join(p["messages"][1]["content"] for p in notes_calls)
+    assert all(f"Paragraph {i}:" in seen for i in range(800))  # the whole paper was read
+    assert "Notes on the whole paper" in card_call["messages"][1]["content"]
+    assert "Paragraph" not in card_call["messages"][1]["content"]
     assert prov["context_length"] == 4096 and prov["service"] == "svc_fake"
+    assert prov["characters_read"] > 0.99 * len(TEXT)
 
 
-async def test_a_large_context_never_reads_more_than_before(client: TestClient) -> None:
+async def test_a_large_context_reads_in_one_call_up_to_the_cap(client: TestClient) -> None:
     router = FakeRouter(131072)
     _, prov = await reader_with(client, router).extract(META, TEXT, "fake/reader")
-    assert prov["characters_read"] == papers.TEXT_FOR_MODEL
+    assert prov["characters_read"] == len(TEXT) and len(router.payloads) == 1
     assert prov["context_length"] == 131072
+    long = TEXT * 3  # past TEXT_FOR_MODEL: parts as large as one call may read
+    router = FakeRouter(131072)
+    _, prov = await reader_with(client, router).extract(META, long, "fake/reader")
+    assert len(long) > papers.TEXT_FOR_MODEL and prov["read_in_parts"] == 3
 
 
 async def test_a_short_paper_is_read_whole(client: TestClient) -> None:
@@ -380,7 +387,8 @@ async def test_a_card_cut_at_the_length_limit_says_so(client: TestClient) -> Non
                         usage={"prompt_tokens": 6000, "completion_tokens": 1200})  # fmt: skip
     with pytest.raises(papers.PaperError) as e:
         await reader_with(client, router).extract(META, TEXT, "fake/reader")
-    assert "didn't fit the model's context (7200 tokens)" in str(e.value)
+    assert str(e.value) == ("the model's answer was cut off at its 1200-token limit: Read "
+                            "again, or choose another reader")  # fmt: skip
     router = FakeRouter(None, cut, finish="length")
     with pytest.raises(papers.PaperError) as e:
         await reader_with(client, router).extract(META, TEXT, "fake/reader")

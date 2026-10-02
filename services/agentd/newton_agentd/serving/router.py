@@ -356,6 +356,15 @@ class Router:
                     self.services.note_model_context(e.service_id, value)
                     break
 
+    def slots(self, requested: str) -> int:
+        """How many requests for this model can run at once now (its ready services'
+        slots; 1 when none is known): how many parts of a paper are read together."""
+        try:
+            _, _, serves = self.resolve(requested)
+        except RouterError:
+            return 1
+        return max(1, sum(e.parallel for e in self.endpoints() if serves(e)))
+
     def context_length(self, requested: str) -> int | None:
         """The context the model is served with: the smallest among the ready services
         serving it (a request may land on any), else among those that may soon serve

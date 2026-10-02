@@ -45,7 +45,8 @@ ARXIV_PDF = "https://arxiv.org/pdf/{id}"
 NEW_ID = re.compile(r"(\d{4}\.\d{4,5})(v\d+)?")
 OLD_ID = re.compile(r"([a-z-]+(?:\.[A-Z]{2})?/\d{7})(v\d+)?")
 MAX_DOWNLOAD = 40 * 1024 * 1024
-TEXT_FOR_MODEL = 24_000  # characters of the paper the model reads (abstract + body)
+TEXT_FOR_MODEL = 60_000  # characters of the paper read in one call; longer: read in parts
+MAX_PAPER = 400_000  # characters of a paper read at all (in parts: research/reading.py)
 CARD_TOKENS = 1200  # the model's answer (max_tokens)
 CHARS_PER_TOKEN = 3  # LaTeX-heavy text: fewer characters per token than prose
 CONTEXT_MARGIN = 256  # tokens kept free: chat template, tokenizers that count differently
@@ -117,6 +118,12 @@ def text_budget(context_length: int | None, prompt_chars: int) -> int:
         return TEXT_FOR_MODEL
     room = (context_length - CARD_TOKENS - CONTEXT_MARGIN) * CHARS_PER_TOKEN - prompt_chars
     return max(0, min(TEXT_FOR_MODEL, room))
+
+
+def _completion_tokens(body: dict[str, Any]) -> int:
+    usage = body.get("usage")
+    value = usage.get("completion_tokens") if isinstance(usage, dict) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
 def _tokens_used(body: dict[str, Any]) -> int:
@@ -541,19 +548,33 @@ class Papers:
                       ) -> tuple[dict[str, Any], dict[str, Any]]:  # fmt: skip
         prompt = PROMPT % {"limiters": list(LIMITER_CHOICES), "times": list(TIME_CHOICES),
                            "kinds": list(CLAIM_KINDS)}  # fmt: skip
-        head = f"Title: {meta['title']}\n\nAbstract: {meta['abstract']}\n\nPaper:\n"
+        head = f"Title: {meta['title']}\n\nAbstract: {meta['abstract']}\n\n"
         # The paper is cut to the reader's context: a prompt longer than the context is
         # truncated by the engine (or refused), and the card comes back cut, or empty.
         learn = getattr(self.router, "learn_context", None)
         if learn is not None:  # the model's own limit can be below the service's setting
             await learn(model)
         context = self.router.context_length(model)
-        budget = text_budget(context, len(prompt) + len(head))
+        notes_label = "Notes on the whole paper, taken part by part:\n"
+        budget = text_budget(context, len(prompt) + len(head) + len(notes_label))
         if budget < min(MIN_TEXT, len(text)):
             raise PaperError(f"the model's context ({context} tokens) is too short to read a "
                              "paper: give the reader service a longer context_length")  # fmt: skip
-        body = text[:budget]
-        from . import structured  # here: it reads this module's choices
+        from . import reading, structured  # here: they read this module's choices
+
+        read: dict[str, Any] = {}
+        if len(text) <= budget:  # it fits: read in one call
+            body = "Paper:\n" + text
+            read["characters_read"] = len(text)
+        else:  # longer than the context: notes on every part, merged until they fit
+            reader = reading.Reader(self.router, model, str(meta["title"]))
+            try:
+                notes, read = await reader.condense(
+                    text[:MAX_PAPER], budget, reading.part_size(context, TEXT_FOR_MODEL)
+                )
+            except reading.ReadingError as e:
+                raise PaperError(f"couldn't read the paper in parts: {e}") from None
+            body = notes_label + notes
 
         result = await self.router.complete({
             "model": model, "temperature": 0, "max_tokens": CARD_TOKENS,
@@ -570,16 +591,20 @@ class Papers:
             card = parse_card(content)
         except PaperError:
             used = _tokens_used(result["body"])
-            # The context filled up (the engine cut the prompt, or the answer): say so,
-            # not "not valid JSON", which reads as a model that can't follow orders.
+            answered = _completion_tokens(result["body"])
+            # Say what filled up, not "not valid JSON" (which reads as a model that can't
+            # follow orders): the answer's own limit, or the context.
+            if answered >= CARD_TOKENS:
+                cut = (f"the model's answer was cut off at its {CARD_TOKENS}-token limit: "
+                       "Read again, or choose another reader")  # fmt: skip
+                raise PaperError(cut) from None
             filled = bool(context) and used >= (context or 0) - CONTEXT_MARGIN // 4
             if filled or choice.get("finish_reason") == "length":
                 size = f" ({context or used} tokens)" if context or used else ""
                 raise PaperError(f"the paper didn't fit the model's context{size}: give the "
                                  "reader service a longer context_length") from None  # fmt: skip
             raise
-        provenance = {**result["provenance"], "characters_read": len(body),
-                      "at": now()}  # fmt: skip
+        provenance = {**result["provenance"], **read, "at": now()}
         if context:
             provenance["context_length"] = context
         return card, provenance
