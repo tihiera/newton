@@ -636,20 +636,29 @@ a:hover {
   background: var(--mint-soft);
 }
 .kv {
+  display: flex;
+  flex-direction: column;
+}
+/* icon | label | value: each row its own grid, the icon centred on the row; the line
+   between rows starts at the label, as in the mockups. */
+.kv-row {
+  position: relative;
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.2fr);
   align-items: center;
-  gap: 10px 14px;
+  column-gap: 14px;
+  padding: 10px 0;
 }
-.kv-row {
-  display: contents;
-}
-.kv-row > * {
-  padding: 12px 0;
+.kv-row + .kv-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50px;
+  right: 0;
   border-top: 1px solid var(--border);
 }
-.kv-row:first-child > * {
-  border-top: 0;
+.kv-row > .icon-btn {
+  justify-self: center;
 }
 .kv-key {
   color: var(--muted);
