@@ -9,6 +9,7 @@ function deps(tauri: boolean, over: Partial<PlatformDeps> = {}) {
     windowOpen: vi.fn<PlatformDeps["windowOpen"]>(),
     download: vi.fn<PlatformDeps["download"]>(),
     writeText: vi.fn<PlatformDeps["writeText"]>(async () => undefined),
+    command: vi.fn<PlatformDeps["command"]>(async () => undefined),
     ...over,
   };
 }
@@ -94,5 +95,32 @@ describe("saveFile", () => {
     expect(await createPlatform(d).saveFile("a.zip", blob)).toBe("a.zip");
     expect(d.download).toHaveBeenCalledWith("a.zip", blob);
     expect(d.invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("restartEngine", () => {
+  it("invokes the shell's restart_engine command", async () => {
+    const d = deps(true);
+    const p = createPlatform(d);
+    expect(p.inShell()).toBe(true);
+    await p.restartEngine();
+    expect(d.command).toHaveBeenCalledWith("restart_engine");
+  });
+
+  it("passes the shell's sentence on, from a string or a {code, message} payload", async () => {
+    const asString = deps(true, { command: async () => Promise.reject("the engine is already starting") });
+    await expect(createPlatform(asString).restartEngine()).rejects.toThrow("the engine is already starting");
+    const asObject = deps(true, {
+      command: async () => Promise.reject({ code: "engine_failed", message: "Python exited with status 1" }),
+    });
+    await expect(createPlatform(asObject).restartEngine()).rejects.toThrow("Python exited with status 1");
+  });
+
+  it("is not offered in a plain browser", async () => {
+    const d = deps(false);
+    const p = createPlatform(d);
+    expect(p.inShell()).toBe(false);
+    await expect(p.restartEngine()).rejects.toThrow(/only the Newton app/);
+    expect(d.command).not.toHaveBeenCalled();
   });
 });

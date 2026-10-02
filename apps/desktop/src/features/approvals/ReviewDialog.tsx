@@ -2,13 +2,14 @@
 // decision. Opened from an experiment, a publication or the approvals drawer.
 
 import { api, type Approval } from "../../api";
+import { useNav } from "../../app/navigation";
 import { Icon } from "../../components/Icon";
 import { ErrorNote, Modal, Spinner } from "../../components/ui";
 import { usePolling } from "../../hooks/usePolling";
 import { ApprovalActions } from "./ApprovalActions";
 import { ApprovalDetails, ApprovalFootnote } from "./ApprovalDetails";
 import { DecisionLine } from "./DecisionLine";
-import { kindText } from "./text";
+import { approvalExperimentId, kindText } from "./text";
 import "./approvals.css";
 
 async function findApproval(id: string, signal: AbortSignal): Promise<Approval | null> {
@@ -20,8 +21,16 @@ async function findApproval(id: string, signal: AbortSignal): Promise<Approval |
 }
 
 export function ReviewDialog({ approvalId, onClose }: { approvalId: string; onClose: () => void }) {
+  const nav = useNav();
   const found = usePolling((s) => findApproval(approvalId, s), [approvalId], { interval: 4000 });
   const approval = found.data;
+  const experimentId = approval ? approvalExperimentId(approval) : null;
+  const openExperiment = experimentId
+    ? () => {
+        nav.showExperiment(experimentId);
+        onClose();
+      }
+    : null;
   const text = kindText(approval?.kind ?? "");
   const centered = approval?.kind === "publish_report";
 
@@ -71,6 +80,11 @@ export function ReviewDialog({ approvalId, onClose }: { approvalId: string; onCl
             <div className="row" style={{ width: "100%" }}>
               <ApprovalFootnote approval={approval} />
               <span className="spacer" />
+              {openExperiment ? (
+                <button className="btn large" onClick={openExperiment}>
+                  Open experiment
+                </button>
+              ) : null}
               <button className="btn large" onClick={onClose}>
                 Close
               </button>

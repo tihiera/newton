@@ -1,5 +1,5 @@
 import type { ResearchItem } from "../../api";
-import { StateChip, Thumb } from "../../components/ui";
+import { StateChip } from "../../components/ui";
 import { paperMeta, paperTitle } from "./format";
 
 /** One paper in the inbox: thumbnail, title (two lines), meta, state. */
@@ -19,7 +19,6 @@ export function PaperRow({
       aria-current={selected ? "true" : undefined}
       title={paperTitle(item)}
     >
-      <Thumb seed={item.id} />
       <div className="paper-row-body">
         <div className="paper-row-title">{paperTitle(item)}</div>
         <div className="paper-row-meta">{paperMeta(item)}</div>

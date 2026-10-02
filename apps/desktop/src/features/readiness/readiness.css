@@ -1,0 +1,41 @@
+/* Readiness checklist (Papers home, first-run card). Builds on globals.css. */
+
+.ready-card .card-head {
+  align-items: flex-start;
+}
+.ready-card.first-run {
+  padding: 26px 28px;
+}
+.ready-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+/* icon | title and sentence | action: the icon keeps its own 40px column and 16px of
+   air before the text. */
+.ready-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  column-gap: 16px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.ready-row:first-child {
+  border-top: 0;
+}
+/* Beats .icon-tile.round (56px), which would spill out of the 40px column. */
+.ready-row .icon-tile.round {
+  width: 40px;
+  height: 40px;
+}
+.ready-text {
+  min-width: 0;
+}
+.ready-title {
+  font-weight: 540;
+}
+.ready-detail {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}

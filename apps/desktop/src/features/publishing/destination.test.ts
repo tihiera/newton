@@ -3,6 +3,7 @@ import { AgentdError, type Connectors, type NotionPage } from "../../api";
 import {
   NOTION_REAUTH,
   PAGE_SEARCH_FROM,
+  canSendAgain,
   closeListOnEscape,
   connectorOf,
   missingInput,
@@ -154,5 +155,14 @@ describe("settingsBlock", () => {
     expect(settingsBlock("notion", flagged, null)).toBe(NOTION_REAUTH);
     expect(NOTION_REAUTH).toBe(SENTENCE);
     expect(settingsBlock("issue", flagged, null)).toBeNull();
+  });
+});
+
+describe("canSendAgain", () => {
+  it("offers Send again only for a failed publication", () => {
+    expect(canSendAgain({ state: "failed" })).toBe(true);
+    for (const state of ["awaiting_approval", "approved", "publishing", "published", "rejected"] as const) {
+      expect(canSendAgain({ state })).toBe(false);
+    }
   });
 });

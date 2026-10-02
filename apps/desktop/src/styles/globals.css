@@ -256,11 +256,8 @@ a:hover {
   gap: 4px;
 }
 .paper-row {
-  display: grid;
-  grid-template-columns: 76px 1fr;
-  gap: 14px;
-  align-items: start;
-  padding: 10px;
+  display: block;
+  padding: 12px 14px;
   border-radius: var(--radius);
   border: 1px solid transparent;
   cursor: pointer;
@@ -1128,10 +1125,45 @@ a:hover {
   place-items: center;
   padding: 40px;
 }
-.connection-card {
-  max-width: 560px;
-  text-align: left;
-  padding: 40px 44px;
+.connection-wait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.connection-wait .logo-mark {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+}
+.connection-line {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+.connection-loading {
+  font-size: 15px;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+/* The logo breathing (soft scale and glow) instead of a spinner. */
+.logo-mark.breathing {
+  animation: breathe 1.8s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-mark.breathing {
+    animation: none;
+  }
 }
 
 .spin {

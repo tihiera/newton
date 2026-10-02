@@ -3,36 +3,41 @@
 macOS shell over the agentd HTTP API. The UI only shows what agentd returns. All
 product logic stays in `services/agentd`.
 
-**Status: U1 shell only.** `src/App.tsx` and `src/placeholder.css` are
-**placeholders** until the real designs land: a "Newton" header, an agentd connection
-indicator, and a plain host list (name, kind, status, CUDA/Metal ok or the reason
-why not), refreshed every 3 s.
+For people who just want to use Newton: from the repository root, `scripts/setup.sh`
+then `scripts/run.sh` (see the root README). This page is for working on the app.
 
-## Run
+## Run (development)
 
 ```sh
-# 1. Start agentd (repo root). It uses the repo-local data dir .data/
-scripts/dev.sh
-
-# 2. Start the app (apps/desktop)
 pnpm install
-pnpm dev:repo      # tauri dev, reading the token from <repo>/.data (matches scripts/dev.sh)
-pnpm dev           # tauri dev, using the default data dir (~/Library/Application Support/Newton)
+pnpm dev:repo      # tauri dev with the repo-local data dir <repo>/.data
+pnpm dev           # tauri dev with the default data dir (~/Library/Application Support/Newton)
+pnpm dev:web       # the UI in a browser (Vite on :1420), against a running agentd
 ```
 
-| Script                       | What it does                                                |
-| ---------------------------- | ----------------------------------------------------------- |
-| `pnpm dev` / `pnpm dev:repo` | `tauri dev` (Vite on :1420 plus the native window)          |
-| `pnpm build`                 | Type-check and build the frontend into `dist/`              |
-| `pnpm bundle`                | `tauri build` (Newton.app + dmg)                            |
-| `pnpm typecheck`             | `tsc` for `src/` and `vite.config.ts`                       |
-| `pnpm test`                  | vitest (API client, with fetch and the Tauri invoke mocked) |
+`tauri dev` starts agentd itself (`uv run --project <repo> --frozen newton-agentd serve`)
+when none is running for that data dir, reuses one that is (for example
+`scripts/dev.sh`), and stops only the agentd it started when the window closes. Its log
+is `<data_dir>/logs/agentd.log`. Newton isn't distributed as a packaged app: people run
+it from a clone.
 
-Rust tests: `cd src-tauri && cargo test`.
+A port that accepts but answers `/health` slowly (a busy agentd) is probed again, not
+taken for another program: the port only counts as taken after several whole non-agentd
+answers, or about 20 s of silence, and never while the agentd the shell just spawned
+still runs. When the engine fails, the shell writes the reason at the end of
+`agentd.log` and waits for **Restart engine** (it doesn't retry by itself).
 
-**Notarization.** If `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` are set in your
-shell, `tauri build` signs **and notarizes** the bundle. For local bundles, run
-`env -u APPLE_ID -u APPLE_PASSWORD -u APPLE_TEAM_ID pnpm tauri build --debug --bundles app`.
+| Script                       | What it does                                                       |
+| ---------------------------- | ------------------------------------------------------------------ |
+| `pnpm dev` / `pnpm dev:repo` | `tauri dev` (Vite on :1420 plus the native window, starts agentd)  |
+| `pnpm dev:web`               | Vite only, for a browser (`scripts/run.sh --browser` wraps this)   |
+| `pnpm build`                 | Type-check and build the frontend into `dist/`                     |
+| `pnpm typecheck`             | `tsc` for `src/` and `vite.config.ts`                              |
+| `pnpm lint` / `pnpm format`  | ESLint (with React's hook rules) / Prettier                        |
+| `pnpm test`                  | vitest (API client and view helpers, with fetch and invoke mocked) |
+
+Rust tests: `cd src-tauri && cargo test` (`cargo test -- --ignored live_engine` runs the
+shell's engine start/reuse/stop against a real agentd).
 
 ## How the UI reaches agentd
 
@@ -48,15 +53,15 @@ shell, `tauri build` signs **and notarizes** the bundle. For local bundles, run
   the token on every call, so agentd can be started after the app. The token is
   never logged: `Connection`'s Debug output redacts it.
 - `src/api/client.ts` calls that command, adds the bearer header and maps failures to
-  `token_missing | config | unreachable | unauthorized | http`. `src/api/types.ts`
-  holds hand-written types for `/health` and `/hosts`. `packages/contracts` has only
+  `token_missing | config | engine_starting | engine_failed | unreachable |
+unauthorized | http`. `src/api/types.ts` holds the hand-written response types. `packages/contracts` has only
   the request schemas.
 - Security:
   - The CSP (`src-tauri/tauri.conf.json`) allows `connect-src` only to Tauri IPC and
     `http://127.0.0.1:*`.
   - The command is gated by the capability ACL (`src-tauri/capabilities/default.json`
     allows `allow-agentd-connection`).
-  - agentd's CORS list already includes `tauri://localhost` (the bundled app) and
+  - agentd's CORS list already includes `tauri://localhost` (the app window) and
     `http://localhost:1420` (`tauri dev`).
 - Apps launched from Finder don't inherit shell env vars, so they use the default
   data dir and port.

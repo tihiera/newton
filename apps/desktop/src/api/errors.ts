@@ -9,6 +9,10 @@ export type AgentdErrorKind =
   | "token_missing"
   /** The shell could not resolve the connection (bad env, unreadable file, not in Tauri). */
   | "config"
+  /** The packaged app is starting its own agentd (the engine); retry shortly. */
+  | "engine_starting"
+  /** The packaged app's agentd didn't start or stopped; `logPath` says where its log is. */
+  | "engine_failed"
   /** Nothing answers at base_url: agentd is not running. */
   | "unreachable"
   /** agentd answered 401: the token doesn't match (different data dir?). */
@@ -24,6 +28,8 @@ export interface AgentdErrorInfo {
   fields?: Record<string, string>;
   /** 409 when a host key isn't trusted yet: the keys to show the user. */
   fingerprints?: HostKeyFingerprint[];
+  /** engine_failed: agentd's log file, to show the user. */
+  logPath?: string;
   /** The whole `{error, code, ...}` body, for the extra fields some errors carry
    *  (e.g. `experiment_id` on a 409 `already_tested`). */
   body?: Record<string, unknown>;
@@ -53,6 +59,7 @@ export class AgentdError extends Error {
   readonly fields: Record<string, string>;
   readonly fingerprints?: HostKeyFingerprint[];
   readonly body?: Record<string, unknown>;
+  readonly logPath?: string;
 
   constructor(kind: AgentdErrorKind, message: string, info: AgentdErrorInfo | number = {}) {
     super(message);
@@ -65,6 +72,7 @@ export class AgentdError extends Error {
     this.fields = i.fields ?? {};
     this.fingerprints = i.fingerprints;
     this.body = i.body;
+    this.logPath = i.logPath;
   }
 
   /** The connection itself is down (vs one request failing). */

@@ -31,6 +31,11 @@ export function computeStatus(hosts: Host[] | undefined): StatusLine {
     };
   }
   const local = hosts.find((h) => h.kind === "local");
+  // Before agentd's first check of this Mac its capabilities say nothing yet: "CPU only"
+  // would contradict /readiness, which probes Metal itself.
+  if (local && local.status === "unknown" && !local.last_checked_at) {
+    return { label: "This Mac · checking…", dot: "hollow" };
+  }
   if (local?.capabilities?.metal?.ok) return { label: "This Mac · Metal", dot: "ok" };
   return { label: "This Mac · CPU only", dot: "warn" };
 }

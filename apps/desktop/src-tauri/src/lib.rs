@@ -1,18 +1,39 @@
 //! Newton desktop shell. All product logic lives in agentd; this shell only tells
-//! the webview where agentd is and which bearer token to use, opens allowed links in
-//! the browser (capabilities/default.json scopes them) and saves downloaded files.
+//! the webview where agentd is and which bearer token to use, starts and stops agentd
+//! from Newton's clone (engine.rs: `uv run newton-agentd`, or reuses one already
+//! running), opens allowed links in the browser (capabilities/default.json scopes them)
+//! and saves downloaded files.
 
 pub mod agentd;
+pub mod engine;
 pub mod files;
 
+use std::sync::Arc;
+
 use tauri::ipc::Request;
+use tauri::{Manager, RunEvent, State};
 use tauri_plugin_dialog::DialogExt;
 
-/// `{ base_url, token, data_dir }`, or `{ code, message }` when agentd hasn't
-/// written its token yet. Re-read on every call, so starting agentd after the UI works.
+use engine::Engine;
+
+/// `{ base_url, token, data_dir }`, or `{ code, message[, log_path] }`: agentd hasn't
+/// written its token yet, or the engine is starting or failed (no clone, no uv, or
+/// agentd stopped). Re-read on every call, so starting agentd after the UI works.
 #[tauri::command]
-fn agentd_connection() -> Result<agentd::Connection, agentd::ConnectionError> {
+fn agentd_connection(
+    engine: State<'_, Arc<Engine>>,
+) -> Result<agentd::Connection, agentd::ConnectionError> {
+    if let Some(err) = engine.connection_error() {
+        return Err(err);
+    }
     agentd::resolve_from_process()
+}
+
+/// Stop the engine (if this shell started it), look for the clone and uv again and
+/// start it again; returns at once, `agentd_connection` says engine_starting meanwhile.
+#[tauri::command]
+fn restart_engine(engine: State<'_, Arc<Engine>>) -> Result<(), agentd::ConnectionError> {
+    engine.restart()
 }
 
 /// Asks where to save the raw body (the suggested name in `files::NAME_HEADER`) with a
@@ -50,7 +71,25 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![agentd_connection, save_file])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .setup(|app| {
+            // agentd from the clone this shell was built from (or NEWTON_REPO), via uv.
+            let engine = Arc::new(Engine::from_process());
+            engine.start();
+            app.manage(engine);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            agentd_connection,
+            restart_engine,
+            save_file
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let RunEvent::Exit = event {
+                if let Some(engine) = app.try_state::<Arc<Engine>>() {
+                    engine.shutdown();
+                }
+            }
+        });
 }

@@ -1,11 +1,12 @@
 import type { ResearchItem } from "../../api";
 import { Empty } from "../../components/ui";
+import { canReadAgain } from "./format";
 
 /** What a tab shows before the paper has a research card. */
 export function NoCard({ item }: { item: ResearchItem }) {
   return (
     <Empty title="No research card yet" icon="paper">
-      {item.state === "failed"
+      {item.state === "failed" || canReadAgain(item)
         ? "Newton couldn't read this paper. The Summary tab says why."
         : item.state === "dismissed"
           ? "This paper was dismissed as not relevant. The Summary tab says why."

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { destinationFacts, kindText, plain, shortCommit, shortHash, variantScheme } from "./text";
+import { approvalExperimentId, destinationFacts, kindText, plain, shortCommit, shortHash, variantScheme } from "./text";
 
 describe("approval text", () => {
   it("labels the approve button per kind", () => {
@@ -39,5 +39,13 @@ describe("approval text", () => {
     expect(plain(true)).toBe("Yes");
     expect(plain(null)).toBe("—");
     expect(plain({ a: 1 })).toContain('"a": 1');
+  });
+});
+
+describe("approvalExperimentId", () => {
+  it("names the experiment an execute approval is about, nothing else", () => {
+    expect(approvalExperimentId({ subject_type: "experiment", subject_id: "exp-1" })).toBe("exp-1");
+    expect(approvalExperimentId({ subject_type: "publication", subject_id: "pub-1" })).toBeNull();
+    expect(approvalExperimentId({ subject_type: "experiment", subject_id: "" })).toBeNull();
   });
 });

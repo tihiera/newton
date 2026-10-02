@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentdEvent, Approval, Experiment, Finding, PollSummary, ResearchItem } from "../../api";
-import { buildTimeline, paperPhase, pollLine, variantsLine } from "./timeline";
+import { buildTimeline, openTarget, paperPhase, pollLine, pollStatus, variantsLine } from "./timeline";
 
 const G = "goal-1";
 
@@ -102,6 +102,35 @@ describe("buildTimeline", () => {
 
   it("ignores malformed poll data", () => {
     expect(buildTimeline({ goalId: G, events: [ev(1, "poll", { nope: true })] })).toEqual([]);
+    expect(buildTimeline({ goalId: G, events: [ev(1, "poll", { goal_id: G, error: "  ", code: "x" })] })).toEqual([]);
+  });
+
+  it("keeps a failed poll ({goal_id, error, code}) with agentd's sentence verbatim", () => {
+    const error = "arXiv couldn't be reached (offline?): Newton will look again when the network is back";
+    const t = buildTimeline({ goalId: G, events: [ev(7, "poll", { goal_id: G, error, code: "offline" })] });
+    expect(t).toEqual([
+      {
+        kind: "poll",
+        key: "ev-7",
+        ts: 7,
+        summary: {
+          goal_id: G,
+          found: 0,
+          new: 0,
+          relevant: 0,
+          dismissed: 0,
+          carded: 0,
+          proposed: [],
+          skipped: [],
+          error,
+        },
+      },
+    ]);
+  });
+
+  it("keeps a finished poll's own error alongside its counts", () => {
+    const t = buildTimeline({ goalId: G, events: [ev(2, "poll", { ...poll, error: "Reader failed." })] });
+    expect(t[0]).toMatchObject({ kind: "poll", summary: { found: 8, error: "Reader failed." } });
   });
 
   it("turns papers into phases with their times", () => {
@@ -211,5 +240,48 @@ describe("helpers", () => {
   });
   it("variants line", () => {
     expect(variantsLine(experiment("e"))).toBe("upwind vs vanleer");
+  });
+});
+
+describe("openTarget", () => {
+  it("opens the paper an experiment came from", () => {
+    expect(openTarget({ id: "exp-1", research_item_id: "paper-1" })).toEqual({ paperId: "paper-1" });
+  });
+  it("opens the experiment itself when it has no paper (built-in schemes)", () => {
+    expect(openTarget({ id: "exp-2", research_item_id: null })).toEqual({ experimentId: "exp-2" });
+  });
+  it("falls back to the finding's paper, then its experiment", () => {
+    expect(openTarget(null, { research_item_id: "paper-3", experiment_id: "exp-3" })).toEqual({ paperId: "paper-3" });
+    expect(openTarget(null, { research_item_id: null, experiment_id: "exp-4" })).toEqual({ experimentId: "exp-4" });
+    expect(openTarget(null, null)).toBeNull();
+  });
+});
+
+describe("pollStatus", () => {
+  it("shows agentd's poll error verbatim and the next look while active", () => {
+    expect(
+      pollStatus({
+        status: "active",
+        last_poll_error: "arXiv couldn't be reached (offline?): Newton will look again when the network is back",
+        next_poll_at: 1700000300,
+      }),
+    ).toEqual({
+      error: "arXiv couldn't be reached (offline?): Newton will look again when the network is back",
+      nextAt: 1700000300,
+    });
+  });
+  it("hides the next look for a paused goal and an empty error", () => {
+    expect(pollStatus({ status: "paused", last_poll_error: "", next_poll_at: 5 })).toEqual({
+      error: null,
+      nextAt: null,
+    });
+    expect(pollStatus({ status: "active" })).toEqual({ error: null, nextAt: null });
+  });
+});
+
+describe("paperPhase after a failed triage", () => {
+  it("reads a discovered paper with agentd's error as failed", () => {
+    expect(paperPhase(paper("p1", "discovered", {}, { error: "the model didn't answer" }))).toBe("failed");
+    expect(paperPhase(paper("p2", "discovered"))).toBe("reading");
   });
 });

@@ -11,27 +11,10 @@ import { useNav } from "../../app/navigation";
 import { Icon } from "../../components/Icon";
 import { ErrorNote, Field, fieldError, Note, Spinner } from "../../components/ui";
 import { useAction } from "../../hooks/useAction";
+import { BACKENDS, BASELINES, INITIAL } from "./choices";
 import { memoryConflict, proposeBody } from "./view";
 
 type ProposeBody = NonNullable<Parameters<typeof api.research.propose>[1]>;
-
-const BASELINES = [
-  ["upwind", "Upwind"],
-  ["lax_wendroff", "Lax–Wendroff"],
-  ["muscl_minmod", "MUSCL · minmod"],
-  ["muscl_vanleer", "MUSCL · van Leer"],
-] as const;
-const INITIAL = [
-  ["sine", "Sine wave"],
-  ["gaussian", "Gaussian pulse"],
-  ["square", "Square wave"],
-] as const;
-const BACKENDS = [
-  ["auto", "Automatic"],
-  ["cpu", "CPU"],
-  ["cuda", "CUDA"],
-  ["metal", "Metal"],
-] as const;
 
 /** `onCancel`: the form was opened on purpose (a paper's "New experiment") and can be
  *  closed again. `onProposed`: the experiment exists (before the review opens). */

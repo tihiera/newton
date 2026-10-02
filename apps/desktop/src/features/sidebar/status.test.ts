@@ -34,6 +34,19 @@ describe("sidebar status lines", () => {
     expect(computeStatus([local])).toEqual({ label: "This Mac · Metal", dot: "ok" });
     expect(computeStatus(undefined).dot).toBe("hollow");
   });
+  it("says this Mac is being checked, not CPU only, before agentd's first check", () => {
+    const unchecked = host({
+      ...local,
+      status: "unknown",
+      hardware: null,
+      last_checked_at: null,
+      capabilities: { cpu: { ok: true }, cuda: { ok: false }, metal: { ok: false } },
+    });
+    expect(computeStatus([unchecked])).toEqual({ label: "This Mac · checking…", dot: "hollow" });
+    const cpuOnly = host({ ...unchecked, status: "online", hardware: { cpu_count: 8 }, last_checked_at: 1 });
+    expect(computeStatus([cpuOnly])).toEqual({ label: "This Mac · CPU only", dot: "warn" });
+    expect(computeStatus([{ ...unchecked, last_checked_at: 1 }]).label).toBe("This Mac · CPU only");
+  });
   const profile = (m: string | null): Profile => ({
     display_name: "x",
     default_model: m,

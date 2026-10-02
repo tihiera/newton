@@ -1,10 +1,12 @@
 // The window: sidebar | paper inbox | workspace, plus the drawers and dialogs.
-// Which workspace shows: a selected paper, else the selected research, else the
-// global library.
+// Which workspace shows: a selected paper, else an experiment opened on its own, else
+// the selected research, else the global library.
 
 import { ApprovalsDrawer } from "../features/approvals/ApprovalsDrawer";
 import { ReviewDialog } from "../features/approvals/ReviewDialog";
 import { ComputeDrawer } from "../features/compute/ComputeDrawer";
+import { ExperimentWorkspace } from "../features/experiments/ExperimentWorkspace";
+import { LibraryExperimentDialog } from "../features/experiments/LibraryExperimentDialog";
 import { GoalWorkspace } from "../features/goals/GoalWorkspace";
 import { NewResearchDialog } from "../features/goals/NewResearchDialog";
 import { ModelsDrawer } from "../features/models/ModelsDrawer";
@@ -49,6 +51,8 @@ export function NewtonShell() {
         </div>
         {nav.paperId ? (
           <PaperWorkspace key={nav.paperId} paperId={nav.paperId} />
+        ) : nav.experimentId ? (
+          <ExperimentWorkspace key={nav.experimentId} experimentId={nav.experimentId} />
         ) : nav.goalId ? (
           <GoalWorkspace key={nav.goalId} goalId={nav.goalId} />
         ) : (
@@ -63,6 +67,7 @@ export function NewtonShell() {
       {o?.kind === "settings" ? <SettingsDialog onClose={nav.close} /> : null}
       {o?.kind === "new-research" ? <NewResearchDialog onClose={nav.close} /> : null}
       {o?.kind === "ingest" ? <IngestDialog goalId={o.goalId} onClose={nav.close} /> : null}
+      {o?.kind === "new-experiment" ? <LibraryExperimentDialog goalId={o.goalId} onClose={nav.close} /> : null}
     </div>
   );
 }

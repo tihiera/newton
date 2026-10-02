@@ -8,7 +8,7 @@ import { ExternalLink } from "../../components/ExternalLink";
 import { Icon } from "../../components/Icon";
 import { Chip, ErrorNote, Spinner, StateChip } from "../../components/ui";
 import { experimentsFor } from "../experiments/view";
-import { exportFileName, latestReported, paperSubline, paperTitle } from "./format";
+import { canReadAgain, exportFileName, latestReported, paperSubline, paperTitle, paperUrl } from "./format";
 
 /** Mockup 02's header: back link, big title, sub line, state and claim chips; the
  *  export of the newest reported experiment (mockup 06) and the link to arXiv. */
@@ -17,8 +17,9 @@ export function PaperHeader({ item }: { item: ResearchItem }) {
   const goals = useGoals();
   const goal = nav.goalId ? goals.data?.find((g) => g.id === nav.goalId) : undefined;
   const method = item.data.card?.method;
-  const url = item.data.paper?.url || `https://arxiv.org/abs/${item.external_id}`;
-  // agentd retries a failed paper when it is ingested again (same item, fresh read).
+  const url = paperUrl(item);
+  // agentd retries a failed paper (or one whose triage failed) when it is ingested
+  // again (same item, fresh read).
   const retry = useAction(() => api.research.ingest({ ref: item.external_id, goal_id: item.goal_id }));
   const experiments = useExperiments();
   const reported = useMemo(
@@ -50,7 +51,7 @@ export function PaperHeader({ item }: { item: ResearchItem }) {
           </Chip>
         ) : null}
         <span className="spacer" />
-        {item.state === "failed" ? (
+        {canReadAgain(item) ? (
           <button className="btn" disabled={retry.busy} onClick={() => void retry.run()}>
             {retry.busy ? <Spinner /> : <Icon name="refresh" size={16} />}
             Read again
@@ -67,9 +68,11 @@ export function PaperHeader({ item }: { item: ResearchItem }) {
             Export
           </button>
         ) : null}
-        <ExternalLink className="icon-btn outlined" href={url} aria-label="Open on arXiv" title="Open on arXiv">
-          <Icon name="link" size={18} />
-        </ExternalLink>
+        {url ? (
+          <ExternalLink className="icon-btn outlined" href={url} aria-label="Open on arXiv" title="Open on arXiv">
+            <Icon name="link" size={18} />
+          </ExternalLink>
+        ) : null}
       </div>
       {retry.error ? <ErrorNote error={retry.error} /> : null}
       {exporter.error ? <ErrorNote error={exporter.error} /> : null}

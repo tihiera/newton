@@ -25,6 +25,25 @@ export interface Health {
   db: { ok: boolean; schema_version: number; path: string };
   scheduler: { running: boolean; ticks: number };
   uptime_seconds: number;
+  /** packaged: running from Newton.app's own runtime; problems: sentences (missing parts). */
+  runtime?: { packaged: boolean; resources_ok: boolean; problems: string[] };
+}
+
+export type ReadinessKey = "engine" | "cpu" | "metal" | "reader" | "gpu_host" | "keychain";
+export type ReadinessState = "ok" | "warn" | "missing";
+export type ReadinessAction = "open_models" | "open_compute" | "open_settings" | "new_experiment";
+
+/** GET /readiness: what this Mac can do right now, as agentd sees it. The UI only renders it. */
+export interface ReadinessItem {
+  key: ReadinessKey;
+  state: ReadinessState;
+  title: string;
+  detail: string;
+  action: { kind: ReadinessAction; label: string } | null;
+}
+
+export interface Readiness {
+  items: ReadinessItem[];
 }
 
 export interface AgentdEvent {
@@ -105,6 +124,10 @@ export interface Goal {
   auto_propose: boolean;
   status: GoalStatus;
   last_polled_at: Timestamp | null;
+  /** The last poll's failure sentence (e.g. offline), cleared by a successful poll. */
+  last_poll_error?: string | null;
+  /** When the loop looks again (sooner after a failure). */
+  next_poll_at?: Timestamp | null;
   created_at: Timestamp;
   updated_at: Timestamp;
 }
@@ -222,6 +245,17 @@ export interface SchemeIR {
   flux: { limiter: string; correction: unknown };
   time: { method: "one_step" | "rk"; tableau?: { a: number[][]; b: number[] } | null };
   claims: { order: number; max_cfl: number; tvd: boolean };
+}
+
+/** POST /experiments/library: compare built-in schemes against a baseline, no paper needed. */
+export interface LibraryExperimentCreate {
+  goal_id?: string | null;
+  /** Library scheme names (GET /schemes), at least one. */
+  candidates: string[];
+  baseline?: string;
+  initial_condition?: string;
+  host_id?: string;
+  backend?: string;
 }
 
 export interface LibraryScheme {

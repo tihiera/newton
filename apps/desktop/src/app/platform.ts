@@ -1,5 +1,6 @@
 // What the desktop shell does for the UI beyond agentd: open a link in the user's
-// browser and save a downloaded file where the user says. In the Tauri shell links go
+// browser, save a downloaded file where the user says, and restart the engine (the
+// agentd the packaged app manages). In the Tauri shell links go
 // through the opener plugin (capabilities/default.json lists the sites it may open) and
 // files through the shell's `save_file` command (a native save dialog; the webview has
 // no filesystem access). In a plain browser (`pnpm dev:web`) the browser does both.
@@ -15,6 +16,8 @@ export interface PlatformDeps {
   isTauri: () => boolean;
   openUrl: (url: string) => Promise<void>;
   invoke: <T>(cmd: string, args: Uint8Array, options: { headers: Record<string, string> }) => Promise<T>;
+  /** A shell command without arguments (`restart_engine`). */
+  command: (cmd: string) => Promise<unknown>;
   /** Browser fallbacks. */
   windowOpen: (url: string) => void;
   download: (name: string, blob: Blob) => void;
@@ -54,6 +57,7 @@ export function createPlatform(deps: Partial<PlatformDeps> = {}) {
     isTauri: deps.isTauri ?? tauriIsTauri,
     openUrl: deps.openUrl ?? ((url) => tauriOpenUrl(url)),
     invoke: deps.invoke ?? ((cmd, args, options) => tauriInvoke(cmd, args, options)),
+    command: deps.command ?? ((cmd) => tauriInvoke(cmd)),
     windowOpen: deps.windowOpen ?? ((url) => void window.open(url, "_blank", "noopener,noreferrer")),
     download: deps.download ?? browserDownload,
     writeText: deps.writeText ?? ((text) => navigator.clipboard.writeText(text)),
@@ -101,7 +105,28 @@ export function createPlatform(deps: Partial<PlatformDeps> = {}) {
     }
   }
 
-  return { openExternal, saveFile, copyText };
+  /** Whether the Tauri shell is around (a plain browser has no engine to restart). */
+  function inShell(): boolean {
+    try {
+      return d.isTauri();
+    } catch {
+      return false;
+    }
+  }
+
+  /** Asks the shell to restart the agentd it manages (packaged app). The shell's
+   *  refusal comes back as an Error with its sentence. */
+  async function restartEngine(): Promise<void> {
+    if (!inShell()) throw new Error("only the Newton app can restart its engine");
+    try {
+      await d.command("restart_engine");
+    } catch (err) {
+      if (err && typeof err === "object" && "message" in err) throw new Error(String(err.message), { cause: err });
+      throw asError(err);
+    }
+  }
+
+  return { openExternal, saveFile, copyText, inShell, restartEngine };
 }
 
 const platform = createPlatform();
@@ -109,3 +134,5 @@ const platform = createPlatform();
 export const openExternal = platform.openExternal;
 export const saveFile = platform.saveFile;
 export const copyText = platform.copyText;
+export const inShell = platform.inShell;
+export const restartEngine = platform.restartEngine;

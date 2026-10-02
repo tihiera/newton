@@ -112,10 +112,7 @@
   white-space: pre-wrap;
 }
 .tl-paper {
-  display: grid;
-  grid-template-columns: 76px 1fr;
-  gap: 16px;
-  align-items: start;
+  display: block;
   margin-top: 12px;
   border: 0;
   background: transparent;
@@ -215,4 +212,9 @@
 }
 .new-research .field-error {
   white-space: pre-line; /* one line per offending list item */
+}
+
+.goal-poll-error {
+  margin-top: 14px;
+  max-width: 760px;
 }

@@ -4,12 +4,14 @@ import { Icon } from "../../components/Icon";
 import { stateLabel } from "../../components/labels";
 import { when } from "../../components/time";
 import { Chip, ErrorNote, Note, Spinner } from "../../components/ui";
-import { doiLinks, journalRef, READING_STATES } from "./format";
+import { canReadAgain, doiLinks, journalRef, READING_STATES } from "./format";
 
 /** The card summary, triage, reading state, abstract and where the text came from. */
 export function SummaryTab({ item }: { item: ResearchItem }) {
   const { card, paper, triage, text } = item.data;
-  const reading = READING_STATES.has(item.state);
+  // A paper whose triage failed stays "discovered" with agentd's error: not reading.
+  const stuck = item.state === "failed" || canReadAgain(item);
+  const reading = READING_STATES.has(item.state) && !stuck;
   const journal = journalRef(item);
   const dois = doiLinks(item);
 
@@ -28,7 +30,7 @@ export function SummaryTab({ item }: { item: ResearchItem }) {
             </div>
           </div>
         ) : null}
-        {item.state === "failed" ? (
+        {stuck ? (
           <ErrorNote>
             <b>Couldn't read this paper.</b> {item.data.error ?? ""}
           </ErrorNote>

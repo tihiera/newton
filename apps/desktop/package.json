@@ -4,11 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "newton": "sh ../../scripts/run.sh",
     "dev": "tauri dev",
     "dev:repo": "NEWTON_DATA_DIR=\"$(cd ../.. && pwd)/.data\" tauri dev",
     "dev:web": "vite",
     "build": "tsc -p tsconfig.json && vite build",
-    "bundle": "tauri build",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "test": "vitest run",
     "tauri": "tauri",

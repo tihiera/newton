@@ -17,6 +17,8 @@ import type {
   Job,
   LibraryScheme,
   LogChunk,
+  LibraryExperimentCreate,
+  Readiness,
   NotionPage,
   ConnectFlow,
   GithubDeviceStart,
@@ -55,6 +57,8 @@ export function createApi(c: AgentdClient = agentd) {
         c.request<Goal>(`/goals/${id}`, { method: "PATCH", body }),
       poll: (id: string) => post<PollSummary>(`/goals/${id}/poll`),
     },
+    /** What this Mac can do now (engine, CPU, Metal, reader, GPU box, Keychain). */
+    readiness: (signal?: AbortSignal) => get<Readiness>("/readiness", undefined, signal),
     research: {
       items: (goalId?: string | null, signal?: AbortSignal) =>
         get<ResearchItem[]>("/research/items", { goal_id: goalId ?? undefined }, signal),
@@ -83,6 +87,8 @@ export function createApi(c: AgentdClient = agentd) {
       list: (state?: string, signal?: AbortSignal) => get<Experiment[]>("/experiments", { state }, signal),
       get: (id: string, signal?: AbortSignal) => get<Experiment>(`/experiments/${id}`, undefined, signal),
       cancel: (id: string) => post<Experiment>(`/experiments/${id}/cancel`),
+      /** Built-in schemes against a baseline, awaiting approval (no paper needed). */
+      fromLibrary: (body: LibraryExperimentCreate) => post<Experiment>("/experiments/library", body),
       report: (id: string) => c.text(`/experiments/${id}/report`),
       reportFile: (id: string, path: string) => c.blob(`/experiments/${id}/report/files/${path}`),
       /** The report as a zip: report.md, report.json (the ValidationReport) and its figures. */
@@ -173,6 +179,8 @@ export function createApi(c: AgentdClient = agentd) {
       publish: (experimentId: string, target: "github" | "notion", destination: Record<string, unknown>) =>
         post<Publication>(`/experiments/${experimentId}/publish`, { target, destination }),
       list: (experimentId?: string) => get<Publication[]>("/publications", { experiment_id: experimentId }),
+      /** Send a failed publication again: the same approved text (409 if it changed). */
+      retry: (id: string) => post<Publication>(`/publications/${id}/retry`),
     },
   };
 }

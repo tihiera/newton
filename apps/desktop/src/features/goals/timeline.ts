@@ -3,7 +3,7 @@
 // pending approvals of those experiments, and the findings. Pure: no fetching, and
 // nothing is judged here (states, evidence and sentences are agentd's).
 
-import type { AgentdEvent, Approval, Experiment, Finding, PollSummary, ResearchItem } from "../../api";
+import type { AgentdEvent, Approval, Experiment, Finding, Goal, PollSummary, ResearchItem } from "../../api";
 
 export type PaperPhase = "reading" | "carded" | "dismissed" | "failed";
 
@@ -33,19 +33,36 @@ export interface TimelineInput {
 const READING = new Set(["discovered", "triaged", "extracting", "awaiting_approval"]);
 const FINISHED = new Set(["reported", "failed", "rejected", "cancelled"]);
 
-function isPollSummary(data: unknown): data is PollSummary {
-  if (!data || typeof data !== "object") return false;
+/** A goal 'poll' event as a summary: a finished poll's counts, or a failed poll
+ *  ({goal_id, error, code}, recorded once per failure streak) with agentd's sentence
+ *  and nothing found. Anything else is not a poll summary (null). */
+export function pollSummary(data: unknown): PollSummary | null {
+  if (!data || typeof data !== "object") return null;
   const d = data as Record<string, unknown>;
-  return typeof d.found === "number" && Array.isArray(d.proposed ?? []) && Array.isArray(d.skipped ?? []);
-}
-
-function normalizePoll(data: PollSummary): PollSummary {
-  return { ...data, proposed: data.proposed ?? [], skipped: data.skipped ?? [] };
+  const proposed = d.proposed ?? [];
+  const skipped = d.skipped ?? [];
+  if (!Array.isArray(proposed) || !Array.isArray(skipped)) return null;
+  if (typeof d.found === "number") return { ...(d as unknown as PollSummary), proposed, skipped };
+  if (typeof d.error === "string" && d.error.trim() && d.found === undefined) {
+    return {
+      goal_id: typeof d.goal_id === "string" ? d.goal_id : "",
+      found: 0,
+      new: 0,
+      relevant: 0,
+      dismissed: 0,
+      carded: 0,
+      proposed: [],
+      skipped: [],
+      error: d.error,
+    };
+  }
+  return null;
 }
 
 export function paperPhase(item: ResearchItem): PaperPhase | null {
   if (item.state === "dismissed") return "dismissed";
-  if (item.state === "failed") return "failed";
+  // Triage failed: agentd leaves the paper discovered with its error (Read again).
+  if (item.state === "failed" || (item.state === "discovered" && item.data.error)) return "failed";
   if (item.data.card) return "carded";
   if (READING.has(item.state)) return "reading";
   return null;
@@ -69,8 +86,9 @@ export function buildTimeline(input: TimelineInput): TimelineEntry[] {
   for (const ev of input.events) {
     if (seen.has(ev.id) || ev.entity_type !== "goal" || ev.entity_id !== goalId) continue;
     seen.add(ev.id);
-    if (ev.kind === "poll" && isPollSummary(ev.data)) {
-      entries.push({ kind: "poll", key: `ev-${ev.id}`, ts: ev.ts, summary: normalizePoll(ev.data) });
+    const summary = ev.kind === "poll" ? pollSummary(ev.data) : null;
+    if (summary) {
+      entries.push({ kind: "poll", key: `ev-${ev.id}`, ts: ev.ts, summary });
     } else if (ev.kind === "created") {
       const title = typeof ev.data?.title === "string" ? ev.data.title : null;
       entries.push({ kind: "created", key: `ev-${ev.id}`, ts: ev.ts, title });
@@ -146,4 +164,32 @@ export function variantsLine(exp: Experiment): string {
   if (!base.length && !cand.length) return exp.title;
   if (!base.length) return cand.join(", ");
   return `${base.join(", ")} vs ${cand.join(", ")}`;
+}
+
+/** Where a timeline card's "Open" goes: the paper the experiment came from, else the
+ *  experiment itself (one from built-in schemes has no paper). */
+export type OpenTarget = { paperId: string } | { experimentId: string } | null;
+
+export function openTarget(
+  experiment: Pick<Experiment, "id" | "research_item_id"> | null,
+  finding?: Pick<Finding, "research_item_id" | "experiment_id"> | null,
+): OpenTarget {
+  const paperId = experiment?.research_item_id ?? finding?.research_item_id ?? null;
+  if (paperId) return { paperId };
+  const experimentId = experiment?.id ?? finding?.experiment_id ?? null;
+  return experimentId ? { experimentId } : null;
+}
+
+/** The goal header's poll line: agentd's sentence for the last failed poll (verbatim,
+ *  cleared by a successful one) and when the loop looks next, while it is active. */
+export interface PollStatus {
+  error: string | null;
+  nextAt: number | null;
+}
+
+export function pollStatus(goal: Pick<Goal, "status" | "last_poll_error" | "next_poll_at">): PollStatus {
+  return {
+    error: goal.last_poll_error?.trim() || null,
+    nextAt: goal.status === "active" && goal.next_poll_at ? goal.next_poll_at : null,
+  };
 }

@@ -124,3 +124,8 @@ export function destinationFacts(target: unknown, destination: unknown): Destina
   }
   return { destination: plain(target), icon: "share", whereLabel: null, where: null };
 }
+
+/** The experiment an approval is about (to open it), or null for anything else. */
+export function approvalExperimentId(a: { subject_type: string; subject_id: string }): string | null {
+  return a.subject_type === "experiment" && a.subject_id ? a.subject_id : null;
+}

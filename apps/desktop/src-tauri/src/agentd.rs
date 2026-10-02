@@ -11,8 +11,10 @@
 //! The token is handed to the webview and never logged: `Connection`'s Debug redacts it.
 
 use std::fmt;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Read, Write};
+use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::Serialize;
 
@@ -37,17 +39,25 @@ impl fmt::Debug for Connection {
     }
 }
 
-/// Serialized to the webview as `{ code, message }`.
+/// Serialized to the webview as `{ code, message }` (plus `log_path` for engine_failed).
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct ConnectionError {
-    /// `token_missing` | `token_unreadable` | `config`
+    /// `token_missing` | `token_unreadable` | `config` | `engine_starting` |
+    /// `engine_failed` (the last two from the engine the shell runs: see engine.rs)
     pub code: &'static str,
     pub message: String,
+    /// engine_failed: agentd's log file, for the user to open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_path: Option<String>,
 }
 
 impl ConnectionError {
-    fn new(code: &'static str, message: String) -> Self {
-        Self { code, message }
+    pub fn new(code: &'static str, message: String) -> Self {
+        Self {
+            code,
+            message,
+            log_path: None,
+        }
     }
 }
 
@@ -60,7 +70,7 @@ pub struct Env<'a> {
 
 impl Env<'_> {
     /// A variable that is set and non-empty (config.py treats "" as unset too).
-    fn get(&self, name: &str) -> Option<String> {
+    pub fn get(&self, name: &str) -> Option<String> {
         (self.var)(name).filter(|v| !v.is_empty())
     }
 
@@ -71,7 +81,7 @@ impl Env<'_> {
     }
 }
 
-fn expand_user(value: &str, env: &Env) -> Result<PathBuf, ConnectionError> {
+pub fn expand_user(value: &str, env: &Env) -> Result<PathBuf, ConnectionError> {
     if value == "~" {
         return Ok(env.home()?.to_path_buf());
     }
@@ -160,12 +170,83 @@ pub fn resolve(env: &Env) -> Result<Connection, ConnectionError> {
 
 /// Resolve from this process's real environment.
 pub fn resolve_from_process() -> Result<Connection, ConnectionError> {
+    with_process_env(resolve)
+}
+
+/// Runs `f` with this process's real environment.
+pub fn with_process_env<T>(f: impl FnOnce(&Env) -> T) -> T {
     let var = |name: &str| std::env::var(name).ok();
-    resolve(&Env {
+    f(&Env {
         var: &var,
         home: std::env::var_os("HOME").map(PathBuf::from),
         macos: cfg!(target_os = "macos"),
     })
+}
+
+/// Who answers `GET /health` on 127.0.0.1:<port>.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Probe {
+    /// Nothing listens there.
+    Free,
+    /// An agentd; `db_path` (from its health) tells which data dir it uses.
+    Agentd { db_path: Option<String> },
+    /// Something else holds the port: it sent a whole answer, and not agentd's.
+    Foreign,
+    /// Something accepted the connection but sent no whole answer in time: a busy
+    /// agentd (its event loop held up by sync work) or a program that never answers.
+    /// Not conclusive on its own: the engine probes again (see engine.rs `PortCheck`).
+    Busy,
+}
+
+/// One `GET /health` with short timeouts (loopback only, no token needed).
+pub fn probe_health(port: u16, timeout: Duration) -> Probe {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr, timeout) else {
+        return Probe::Free;
+    };
+    let _ = stream.set_read_timeout(Some(timeout));
+    let _ = stream.set_write_timeout(Some(timeout));
+    let request =
+        format!("GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
+    if stream.write_all(request.as_bytes()).is_err() {
+        return Probe::Busy;
+    }
+    let mut raw = Vec::new();
+    // `Connection: close`: a whole answer ends with the peer closing. A read that timed
+    // out (or failed) got at most part of one.
+    let complete = stream.take(1 << 20).read_to_end(&mut raw).is_ok();
+    probe_from(&String::from_utf8_lossy(&raw), complete)
+}
+
+/// What a read of `raw` means: a partial answer that isn't (yet) agentd's is `Busy`.
+pub fn probe_from(raw: &str, complete: bool) -> Probe {
+    match parse_health(raw) {
+        Probe::Foreign if !complete => Probe::Busy,
+        probe => probe,
+    }
+}
+
+/// An HTTP response to `GET /health`: agentd's is a 200 with JSON carrying `status` and
+/// `db.path`.
+pub fn parse_health(raw: &str) -> Probe {
+    let Some((head, body)) = raw.split_once("\r\n\r\n") else {
+        return Probe::Foreign;
+    };
+    let ok = head.lines().next().is_some_and(|status| {
+        status.starts_with("HTTP/1.1 200") || status.starts_with("HTTP/1.0 200")
+    });
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(body.trim()) else {
+        return Probe::Foreign;
+    };
+    if !ok || json.get("status").and_then(|s| s.as_str()).is_none() || json.get("db").is_none() {
+        return Probe::Foreign;
+    }
+    Probe::Agentd {
+        db_path: json
+            .pointer("/db/path")
+            .and_then(|p| p.as_str())
+            .map(str::to_string),
+    }
 }
 
 #[cfg(test)]
@@ -278,6 +359,82 @@ mod tests {
         );
         assert_eq!(conn.token, "from-env");
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn parse_health_tells_agentd_from_other_programs() {
+        let agentd = "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n\r\n\
+            {\"status\":\"ok\",\"db\":{\"ok\":true,\"path\":\"/d/newton.db\"}}";
+        assert_eq!(
+            parse_health(agentd),
+            Probe::Agentd {
+                db_path: Some("/d/newton.db".into())
+            }
+        );
+        let other = "HTTP/1.1 200 OK\r\n\r\n<html>hi</html>";
+        assert_eq!(parse_health(other), Probe::Foreign);
+        let not_found = "HTTP/1.1 404 Not Found\r\n\r\n{\"status\":\"x\",\"db\":{}}";
+        assert_eq!(parse_health(not_found), Probe::Foreign);
+        assert_eq!(parse_health(""), Probe::Foreign);
+    }
+
+    #[test]
+    fn a_partial_answer_is_busy_not_foreign() {
+        let head = "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n\r\n{\"status\":";
+        assert_eq!(probe_from(head, false), Probe::Busy);
+        assert_eq!(probe_from("", false), Probe::Busy);
+        assert_eq!(probe_from(head, true), Probe::Foreign, "closed mid-answer");
+        let whole = "HTTP/1.1 200 OK\r\n\r\n{\"status\":\"ok\",\"db\":{\"path\":\"/d/n.db\"}}";
+        assert!(matches!(probe_from(whole, false), Probe::Agentd { .. }));
+    }
+
+    /// A listener that accepts and never answers (a busy agentd): Busy, not Foreign.
+    #[test]
+    fn probe_of_a_silent_listener_is_busy() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        // Accepted by the kernel's backlog; nobody reads or writes.
+        assert_eq!(probe_health(port, Duration::from_millis(200)), Probe::Busy);
+        drop(listener);
+    }
+
+    /// A program that answers something else in full: Foreign.
+    #[test]
+    fn probe_of_another_http_server_is_foreign() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 512];
+            let _ = s.read(&mut buf);
+            let _ = s.write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n<html>hi</html>");
+        });
+        assert_eq!(probe_health(port, Duration::from_secs(2)), Probe::Foreign);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn probe_of_a_closed_port_is_free() {
+        // Bind then drop: the port is (almost certainly) closed right after.
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        assert_eq!(probe_health(port, Duration::from_millis(300)), Probe::Free);
+    }
+
+    #[test]
+    fn engine_failed_serializes_its_log_path_and_others_omit_it() {
+        let mut err = ConnectionError::new("engine_failed", "stopped".into());
+        assert_eq!(
+            serde_json::to_string(&err).unwrap(),
+            r#"{"code":"engine_failed","message":"stopped"}"#
+        );
+        err.log_path = Some("/d/logs/agentd.log".into());
+        assert!(serde_json::to_string(&err)
+            .unwrap()
+            .ends_with(r#""log_path":"/d/logs/agentd.log"}"#));
     }
 
     #[test]

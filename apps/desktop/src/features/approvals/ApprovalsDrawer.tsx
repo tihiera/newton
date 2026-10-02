@@ -2,16 +2,19 @@
 
 import type { Approval } from "../../api";
 import { useApprovals } from "../../app/data";
+import { useNav } from "../../app/navigation";
 import { Icon } from "../../components/Icon";
 import { Chip, Drawer, Empty, ErrorNote, Spinner } from "../../components/ui";
 import { when } from "../../components/time";
 import { ApprovalActions } from "./ApprovalActions";
 import { ApprovalDetails, ApprovalFootnote } from "./ApprovalDetails";
-import { kindText } from "./text";
+import { approvalExperimentId, kindText } from "./text";
 import "./approvals.css";
 
 function ApprovalCard({ approval, onDecided }: { approval: Approval; onDecided: () => void }) {
+  const nav = useNav();
   const text = kindText(approval.kind);
+  const experimentId = approvalExperimentId(approval);
   return (
     <div className="card ap-card">
       <div className="card-head" style={{ alignItems: "flex-start" }}>
@@ -25,6 +28,18 @@ function ApprovalCard({ approval, onDecided }: { approval: Approval; onDecided: 
             <span>{when(approval.created_at)}</span>
           </div>
         </div>
+        {experimentId ? (
+          <button
+            className="btn ghost"
+            onClick={() => {
+              nav.showExperiment(experimentId);
+              nav.close();
+            }}
+          >
+            Open experiment
+            <Icon name="chevronRight" size={16} />
+          </button>
+        ) : null}
       </div>
       <ApprovalDetails approval={approval} />
       <div style={{ marginTop: 14 }}>

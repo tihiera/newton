@@ -20,3 +20,6 @@ export const useServices = () => usePolling((s) => api.services.list(s), [], { i
 export const useRouterStatus = () => usePolling((s) => api.router.status(s), [], { interval: 5000 });
 
 export const useExperiments = () => usePolling((s) => api.experiments.list(undefined, s), [], { interval: 5000 });
+
+/** What this Mac can do now (GET /readiness: answered from agentd's cached state). */
+export const useReadiness = () => usePolling((s) => api.readiness(s), [], { interval: 15000 });

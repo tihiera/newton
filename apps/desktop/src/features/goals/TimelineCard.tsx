@@ -6,10 +6,10 @@ import type { Experiment, Finding, ResearchItem } from "../../api";
 import { useNav } from "../../app/navigation";
 import { Icon } from "../../components/Icon";
 import { when } from "../../components/time";
-import { Chip, EvidenceBadge, StateChip, Thumb } from "../../components/ui";
+import { Chip, EvidenceBadge, StateChip } from "../../components/ui";
 import { paperMeta, paperTitle } from "../papers/format";
 import { PollDetails } from "./PollDetails";
-import { pollLine, variantsLine, type TimelineEntry } from "./timeline";
+import { openTarget, pollLine, variantsLine, type OpenTarget, type TimelineEntry } from "./timeline";
 
 type Tone = "yellow" | "blush" | "lavender" | "powder" | "mint" | "gray";
 
@@ -60,7 +60,6 @@ function MiniPaper({ item, chip }: { item: ResearchItem; chip?: ReactNode }) {
   const nav = useNav();
   return (
     <button className="tl-paper" onClick={() => nav.selectPaper(item.id)} title="Open paper">
-      <Thumb seed={item.id} />
       <span style={{ minWidth: 0 }}>
         <span className="tl-paper-title" style={{ display: "block" }}>
           {paperTitle(item)}
@@ -73,6 +72,22 @@ function MiniPaper({ item, chip }: { item: ResearchItem; chip?: ReactNode }) {
           <StateChip kind="paper" state={item.state} />
         </span>
       </span>
+    </button>
+  );
+}
+
+/** "Open": the experiment's paper, or the experiment itself when it has none. */
+function OpenButton({ target }: { target: OpenTarget }) {
+  const nav = useNav();
+  if (!target) return null;
+  return (
+    <button
+      className="btn"
+      onClick={() => ("paperId" in target ? nav.selectPaper(target.paperId) : nav.showExperiment(target.experimentId))}
+      title={"paperId" in target ? "Open the paper" : "Open the experiment"}
+    >
+      Open
+      <Icon name="chevronRight" size={16} />
     </button>
   );
 }
@@ -108,10 +123,8 @@ function ResultCard({
   experiment: Experiment | null;
   finding: Finding | null;
 }) {
-  const nav = useNav();
   const evidence = finding?.evidence ?? experiment?.evidence ?? null;
   const summary = finding?.summary ?? experiment?.evaluation?.summary ?? experiment?.error ?? null;
-  const paperId = experiment?.research_item_id ?? finding?.research_item_id ?? null;
   const reported = !experiment || experiment.state === "reported";
   return (
     <Shell
@@ -120,14 +133,7 @@ function ResultCard({
       title={experiment ? (RESULT_TITLES[experiment.state] ?? "Experiment finished") : "Finding recorded"}
       sub={experiment ? variantsLine(experiment) : (finding?.scheme_name ?? finding?.experiment_id)}
       ts={ts}
-      side={
-        paperId ? (
-          <button className="btn" onClick={() => nav.selectPaper(paperId)}>
-            Open
-            <Icon name="chevronRight" size={16} />
-          </button>
-        ) : null
-      }
+      side={<OpenButton target={openTarget(experiment, finding)} />}
     >
       <div className="row" style={{ gap: 8 }}>
         {reported ? <EvidenceBadge evidence={evidence} /> : null}
@@ -218,12 +224,9 @@ export function TimelineCard({ entry, papers }: { entry: TimelineEntry; papers: 
                 Review
                 <Icon name="chevronRight" size={16} />
               </button>
-            ) : exp.research_item_id ? (
-              <button className="btn" onClick={() => exp.research_item_id && nav.selectPaper(exp.research_item_id)}>
-                Open
-                <Icon name="chevronRight" size={16} />
-              </button>
-            ) : null
+            ) : (
+              <OpenButton target={openTarget(exp)} />
+            )
           }
         >
           <div className="row" style={{ gap: 8 }}>

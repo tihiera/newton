@@ -29,8 +29,9 @@ export interface RequestOptions {
 
 function connectionError(err: unknown): AgentdError {
   if (err && typeof err === "object" && "code" in err && "message" in err) {
-    const { code, message } = err as { code: unknown; message: unknown };
-    return new AgentdError(code === "token_missing" ? "token_missing" : "config", String(message));
+    const { code, message, log_path } = err as { code: unknown; message: unknown; log_path?: unknown };
+    const kind = code === "token_missing" || code === "engine_starting" || code === "engine_failed" ? code : "config";
+    return new AgentdError(kind, String(message), typeof log_path === "string" ? { logPath: log_path } : {});
   }
   if (typeof err === "string") return new AgentdError("config", err);
   return new AgentdError(

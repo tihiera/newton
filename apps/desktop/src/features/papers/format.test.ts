@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ResearchItem } from "../../api";
 import {
   arxivYear,
+  canReadAgain,
   correctionText,
   countByState,
   doiLinks,
@@ -11,6 +12,7 @@ import {
   matchesQuery,
   paperMeta,
   paperSubline,
+  paperUrl,
   paperYear,
   provenanceRows,
   timeMethodText,
@@ -185,5 +187,26 @@ describe("provenance", () => {
     });
     expect(rows.map((r) => r.key)).toEqual(["model", "host", "request-id", "zeta"]);
     expect(rows[2].label).toBe("Router request");
+  });
+});
+
+describe("paperUrl", () => {
+  it("keeps arXiv's URL, else the abs page, for real papers", () => {
+    expect(paperUrl(item({}, { paper }))).toBe("https://arxiv.org/abs/2401.12345");
+    expect(paperUrl(item())).toBe("https://arxiv.org/abs/2401.12345");
+    expect(paperUrl(item({}, { paper: { ...paper, url: "javascript:alert(1)" } }))).toBe(
+      "https://arxiv.org/abs/2401.12345",
+    );
+  });
+});
+
+describe("read again", () => {
+  it("applies to a failed paper and to a discovered one whose triage failed", () => {
+    expect(canReadAgain(item({ state: "failed" }))).toBe(true);
+    expect(canReadAgain(item({ state: "discovered" }, { error: "the model didn't answer within 60 s" }))).toBe(true);
+  });
+  it("not while it is being read, or once carded", () => {
+    expect(canReadAgain(item({ state: "discovered" }))).toBe(false);
+    expect(canReadAgain(item({ state: "carded" }, { error: "old" }))).toBe(false);
   });
 });

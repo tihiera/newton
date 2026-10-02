@@ -1,7 +1,7 @@
 // The publish request a destination choice maps to (docs/ui-handoff.md §5.6). Only
 // the shape: agentd validates the repo and page id and explains what's wrong.
 
-import { AgentdError, type Connectors, type NotionPage } from "../../api";
+import { AgentdError, type Connectors, type NotionPage, type Publication } from "../../api";
 
 export type Choice = "gist" | "issue" | "notion";
 
@@ -102,4 +102,10 @@ export function settingsBlock(
   if (target !== "notion") return null;
   if (notionReauth) return notionReauth;
   return conns.accounts?.notion?.needs_reauth === true ? NOTION_REAUTH : null;
+}
+
+/** "Send again" applies to a failed publication: agentd sends the same approved text
+ *  again (and answers 409, in its words, if the report changed since). */
+export function canSendAgain(pub: Pick<Publication, "state">): boolean {
+  return pub.state === "failed";
 }

@@ -175,10 +175,7 @@
 
 /* library home */
 .home-card {
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 16px;
-  align-items: start;
+  display: block;
   text-align: left;
   cursor: pointer;
   width: 100%;

@@ -53,10 +53,31 @@ export function paperMeta(item: ResearchItem): string {
   return [who, yearAfter(journal, item)].filter(Boolean).join(" · ");
 }
 
+/** Where the paper came from, as the header and the Source card name it. */
+export function sourceLabel(item: Pick<ResearchItem, "source" | "external_id">): string {
+  if (item.source === "arxiv" || !item.source) return `arXiv ${item.external_id}`;
+  return `${item.source} ${item.external_id}`;
+}
+
+/** The paper's page on the web: arXiv's URL, else its abs page for an arXiv id; null
+ *  for a paper from another source with no page. */
+export function paperUrl(item: Pick<ResearchItem, "source" | "external_id" | "data">): string | null {
+  const url = item.data.paper?.url;
+  if (url && /^https?:\/\//i.test(url)) return url;
+  if (item.source && item.source !== "arxiv") return null;
+  return `https://arxiv.org/abs/${item.external_id}`;
+}
+
+/** Whether "Read again" applies: the paper failed, or its triage failed and left it
+ *  discovered with agentd's error. agentd reads it again on a new ingest. */
+export function canReadAgain(item: Pick<ResearchItem, "state" | "data">): boolean {
+  return item.state === "failed" || (item.state === "discovered" && !!item.data.error);
+}
+
 /** The header sub line: arXiv id · journal · year · authors. */
 export function paperSubline(item: ResearchItem): string {
   const journal = journalRef(item);
-  return [`arXiv ${item.external_id}`, journal, yearAfter(journal, item), authorList(item)].filter(Boolean).join(" · ");
+  return [sourceLabel(item), journal, yearAfter(journal, item), authorList(item)].filter(Boolean).join(" · ");
 }
 
 export interface DoiLink {
