@@ -2,9 +2,12 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Main window: core APIs plus the agentd connection command (base URL + bearer token).",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
-    "allow-agentd-connection"
+    "allow-agentd-connection",
+    "core:window:allow-start-dragging"
   ]
 }

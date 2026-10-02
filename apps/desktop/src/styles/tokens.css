@@ -1,0 +1,51 @@
+/* Newton design tokens: warm off-white, milky surfaces, soft mesh accents. */
+:root {
+  --bg: #f4f1ec;
+  --bg-deep: #ece7df;
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-solid: #fdfcfa;
+  --surface-strong: #ffffff;
+  --surface-sunken: rgba(246, 243, 238, 0.85);
+  --border: rgba(30, 24, 16, 0.07);
+  --border-strong: rgba(30, 24, 16, 0.13);
+  --shadow-sm: 0 1px 2px rgba(40, 30, 20, 0.04), 0 1px 1px rgba(40, 30, 20, 0.03);
+  --shadow: 0 10px 30px rgba(60, 45, 30, 0.07), 0 2px 6px rgba(60, 45, 30, 0.04);
+  --shadow-lg: 0 30px 80px rgba(50, 38, 25, 0.16), 0 8px 24px rgba(50, 38, 25, 0.08);
+
+  --ink: #141210;
+  --ink-2: #3b3732;
+  --muted: #8b857c;
+  --faint: #b6b0a6;
+
+  --yellow: #fbe6a2;
+  --yellow-soft: #fdf3d2;
+  --blush: #f8c9dd;
+  --blush-soft: #fde8f0;
+  --lavender: #d8cdf6;
+  --lavender-soft: #eee9fb;
+  --powder: #c7dcf7;
+  --powder-soft: #e7f0fb;
+  --mint-soft: #e3f3dc;
+
+  --green: #2f8a3f;
+  --green-soft: #def1d8;
+  --amber: #c98a00;
+  --amber-ink: #8a5d00;
+  --amber-soft: #fbefcb;
+  --red: #d33a57;
+  --red-soft: #fbe1e6;
+  --blue: #2f6fe0;
+  --gray-soft: #eeebe6;
+
+  --radius-xl: 28px;
+  --radius-lg: 22px;
+  --radius: 16px;
+  --radius-sm: 11px;
+  --pill: 999px;
+
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Helvetica Neue", sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  --sidebar-w: 236px;
+  --inbox-w: 340px;
+}

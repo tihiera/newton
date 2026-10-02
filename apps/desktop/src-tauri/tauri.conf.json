@@ -14,8 +14,12 @@
       {
         "label": "main",
         "title": "Newton",
-        "width": 1000,
-        "height": 700
+        "width": 1480,
+        "height": 940,
+        "minWidth": 1100,
+        "minHeight": 720,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {
@@ -23,7 +27,7 @@
         "default-src": "'self'",
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
-        "img-src": "'self' data:",
+        "img-src": "'self' data: blob:",
         "connect-src": "ipc: http://ipc.localhost http://127.0.0.1:*",
         "object-src": "'none'",
         "base-uri": "'self'",
@@ -33,7 +37,7 @@
         "default-src": "'self'",
         "script-src": "'self' 'unsafe-inline'",
         "style-src": "'self' 'unsafe-inline'",
-        "img-src": "'self' data:",
+        "img-src": "'self' data: blob:",
         "connect-src": "ipc: http://ipc.localhost http://127.0.0.1:* ws://localhost:1420",
         "object-src": "'none'",
         "base-uri": "'self'"
@@ -42,7 +46,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
+    "targets": [
+      "app",
+      "dmg"
+    ],
     "category": "DeveloperTool",
     "macOS": {
       "minimumSystemVersion": "13.0"

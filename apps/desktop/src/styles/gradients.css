@@ -1,0 +1,59 @@
+/* Mesh gradients, all CSS: yellow, blush, lavender, powder blue on milky white. */
+
+.mesh-header {
+  position: relative;
+}
+.mesh-header::before {
+  content: "";
+  position: absolute;
+  inset: -40px -40px auto 30%;
+  height: 230px;
+  pointer-events: none;
+  background:
+    radial-gradient(closest-side at 30% 55%, rgba(251, 230, 162, 0.75), transparent 72%),
+    radial-gradient(closest-side at 55% 45%, rgba(248, 201, 221, 0.7), transparent 72%),
+    radial-gradient(closest-side at 75% 50%, rgba(216, 205, 246, 0.65), transparent 72%),
+    radial-gradient(closest-side at 92% 40%, rgba(199, 220, 247, 0.7), transparent 72%);
+  filter: blur(18px);
+  opacity: 0.85;
+  z-index: 0;
+}
+.mesh-header > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mesh-card {
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(251, 230, 162, 0.38), transparent 55%),
+    radial-gradient(120% 140% at 55% 0%, rgba(248, 201, 221, 0.32), transparent 55%),
+    radial-gradient(120% 140% at 100% 30%, rgba(199, 220, 247, 0.38), transparent 55%),
+    var(--surface-strong);
+}
+
+.mesh-selected {
+  background: linear-gradient(110deg, var(--yellow-soft) 0%, #fdf0e6 55%, var(--blush-soft) 100%);
+}
+
+.mesh-tab-active {
+  background: linear-gradient(100deg, rgba(251, 230, 162, 0.85), rgba(248, 201, 221, 0.75));
+}
+
+/* Paper thumbnails: a soft blob mix seeded per paper (--h1/--h2/--h3 set inline). */
+.thumb {
+  background:
+    radial-gradient(60% 60% at 30% 70%, hsl(var(--h1) 90% 70% / 0.95), transparent 70%),
+    radial-gradient(55% 55% at 72% 35%, hsl(var(--h2) 85% 74% / 0.9), transparent 70%),
+    radial-gradient(70% 70% at 60% 90%, hsl(var(--h3) 95% 78% / 0.95), transparent 70%),
+    linear-gradient(135deg, #f8f4ff, #fff7ea);
+  filter: saturate(1.05);
+}
+
+.logo-mark {
+  background:
+    radial-gradient(50% 50% at 30% 30%, #f9d96b 0%, transparent 70%),
+    radial-gradient(50% 50% at 75% 35%, #f3a3c8 0%, transparent 70%),
+    radial-gradient(50% 50% at 50% 80%, #a9c4f5 0%, transparent 70%),
+    radial-gradient(50% 50% at 20% 75%, #c9b6f2 0%, transparent 70%);
+  filter: blur(0.4px);
+}

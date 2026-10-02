@@ -116,6 +116,40 @@ describe("agentd client", () => {
     const err = await caught(client.request("/hosts/nope"));
     expect(err.kind).toBe("http");
     expect(err.status).toBe(404);
-    expect(err.message).toBe("/hosts/nope: HTTP 404: host not found");
+    expect(err.message).toBe("host not found"); // agentd's sentence, verbatim
+    expect(err.path).toBe("/hosts/nope");
+  });
+
+  it("sends JSON bodies and query strings", async () => {
+    const fetch = vi.fn<FetchFn>(async () => json({ id: "goal-1" }, 201));
+    const client = createAgentdClient({ invoke: invokeOk(), fetch });
+    await client.request("/goals", { method: "POST", body: { title: "t" }, query: { a: 1, b: undefined } });
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe("http://127.0.0.1:8799/goals?a=1");
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBe('{"title":"t"}');
+    expect(new Headers(init?.headers).get("Content-Type")).toBe("application/json");
+  });
+
+  it("maps FastAPI 422s onto fields", async () => {
+    const body = { detail: [{ loc: ["body", "title"], msg: "String should have at least 1 character" },
+                            { loc: ["body", "keywords", 0], msg: "Value error, bad keyword" }] };
+    const fetch = vi.fn<FetchFn>(async () => json(body, 422));
+    const client = createAgentdClient({ invoke: invokeOk(), fetch });
+    const err = await caught(client.request("/goals", { method: "POST", body: {} }));
+    expect(err.status).toBe(422);
+    expect(err.fields.title).toBe("String should have at least 1 character");
+    expect(err.fields["0"]).toBe("bad keyword");
+  });
+
+  it("keeps host-key fingerprints from a 409 and reads router-style errors", async () => {
+    const fp = vi.fn<FetchFn>(async () => json({ error: "unknown host key", fingerprints: ["SHA256:abc"] }, 409));
+    const err = await caught(createAgentdClient({ invoke: invokeOk(), fetch: fp }).request("/hosts/h/connect"));
+    expect(err.fingerprints).toEqual(["SHA256:abc"]);
+    const router = vi.fn<FetchFn>(async () =>
+      json({ error: { message: "no model service runs 'x'", code: "model_not_found" } }, 404));
+    const e2 = await caught(createAgentdClient({ invoke: invokeOk(), fetch: router }).request("/v1/x"));
+    expect(e2.message).toBe("no model service runs 'x'");
+    expect(e2.code).toBe("model_not_found");
   });
 });

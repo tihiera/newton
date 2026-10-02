@@ -1,9 +1,8 @@
-// Response shapes of the agentd endpoints the shell uses.
+// Response shapes of the agentd endpoints the app uses.
 //
-// Hand-written from services/agentd/newton_agentd/api/routes.py (GET /health) and
-// orchestration/hosts.py `host_view` + orchestration/capabilities.py (GET /hosts).
-// packages/contracts only exports request models (e.g. HostCreate), not these views.
-// Only the fields the UI reads are typed strictly; the rest pass through.
+// Hand-written from services/agentd (api/routes.py and the view functions behind it;
+// see docs/ui-handoff.md). Only fields the UI reads are typed strictly; anything else
+// passes through. packages/contracts holds the request schemas.
 
 /** Returned by the Tauri command `agentd_connection` (src-tauri/src/agentd.rs). */
 export interface AgentdConnection {
@@ -18,6 +17,8 @@ export interface AgentdConnectionError {
   message: string;
 }
 
+export type Timestamp = number; // unix seconds
+
 export interface Health {
   status: "ok" | "degraded";
   version: string;
@@ -25,6 +26,17 @@ export interface Health {
   scheduler: { running: boolean; ticks: number };
   uptime_seconds: number;
 }
+
+export interface AgentdEvent {
+  id: number;
+  ts: Timestamp;
+  entity_type: string;
+  entity_id: string;
+  kind: string;
+  data: Record<string, unknown>;
+}
+
+// -- hosts -------------------------------------------------------------------------
 
 export type BackendName = "cpu" | "cuda" | "metal";
 
@@ -42,7 +54,480 @@ export interface Host {
   status: string;
   ssh_target: string | null;
   last_error: string | null;
-  last_checked_at: number | null;
+  last_checked_at: Timestamp | null;
+  gpu_support?: "auto" | "off" | "cuda";
+  max_parallel_jobs?: number;
+  hardware?: HostHardware | null;
   capabilities: Record<BackendName, Capability>;
+  gpu_task?: { state: string; [extra: string]: unknown } | null;
   [extra: string]: unknown;
+}
+
+export interface HostHardware {
+  os?: Record<string, unknown> | string;
+  cpu?: Record<string, unknown> | string;
+  cpu_count?: number;
+  memory?: { total?: number; [extra: string]: unknown };
+  gpus?: Array<Record<string, unknown>>;
+  apple_gpu?: Record<string, unknown> | null;
+  worker?: { version?: string; ok?: boolean; [extra: string]: unknown };
+  [extra: string]: unknown;
+}
+
+export interface SshConfigHost {
+  alias: string;
+  source: string;
+  hostname: string | null;
+  user: string | null;
+  port: number | null;
+  proxy: string | null;
+  config_file: string;
+  host_id: string | null;
+  addable: boolean;
+}
+
+export interface ConnectResult {
+  host: Host;
+  selftest_job_id: string;
+}
+
+// -- goals and papers --------------------------------------------------------------
+
+export type GoalStatus = "active" | "paused" | "archived";
+
+export interface Goal {
+  id: string;
+  title: string;
+  description: string;
+  keywords: string[];
+  categories: string[];
+  poll_hours: number;
+  auto_propose: boolean;
+  status: GoalStatus;
+  last_polled_at: Timestamp | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface GoalCreate {
+  title: string;
+  description?: string;
+  keywords?: string[];
+  categories?: string[];
+  poll_hours?: number;
+  auto_propose?: boolean;
+}
+
+export interface PollSummary {
+  goal_id: string;
+  found: number;
+  new: number;
+  relevant: number;
+  dismissed: number;
+  carded: number;
+  proposed: string[];
+  skipped: Array<{ item: string; why: string }>;
+  error?: string;
+}
+
+export type ResearchItemState =
+  | "discovered"
+  | "triaged"
+  | "awaiting_approval"
+  | "extracting"
+  | "carded"
+  | "experiment_planned"
+  | "executing"
+  | "evaluating"
+  | "reported"
+  | "dismissed"
+  | "failed";
+
+export interface PaperMeta {
+  arxiv_id: string;
+  title: string;
+  abstract: string;
+  authors: string[];
+  published: string;
+  categories: string[];
+  url: string;
+}
+
+export interface PaperCard {
+  relevant: boolean;
+  summary: string;
+  method: {
+    name: string;
+    limiter: string;
+    second_order_correction: boolean;
+    time_integration: string;
+    order: number | null;
+    max_cfl: number | null;
+    tvd: boolean;
+  };
+  claims: Array<{ kind: string; text: string }>;
+  benchmarks: string[];
+}
+
+export interface ResearchItem {
+  id: string;
+  goal_id: string | null;
+  kind: "paper";
+  title: string;
+  source: string;
+  external_id: string;
+  state: ResearchItemState;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+  data: {
+    model?: string;
+    found_by?: string;
+    paper?: PaperMeta;
+    text?: { from: "html" | "pdf"; characters: number; sha256: string; path?: string };
+    triage?: { relevant: boolean; why: string; model?: string };
+    card?: PaperCard;
+    scheme_ir?: SchemeIR | null;
+    scheme_ir_digest?: string | null;
+    method_digest?: string | null;
+    scheme_note?: string;
+    extraction?: Record<string, unknown>;
+    error?: string;
+    proposal_note?: string;
+    [extra: string]: unknown;
+  };
+}
+
+export interface Finding {
+  id: string;
+  goal_id: string | null;
+  research_item_id: string | null;
+  experiment_id: string;
+  scheme_name: string | null;
+  scheme_digest: string | null;
+  evidence: Evidence;
+  claims: Array<{ claim: string; claimed: unknown; holds: boolean | null }>;
+  summary: string;
+  created_at: Timestamp;
+}
+
+// -- schemes -------------------------------------------------------------------------
+
+export interface SchemeIR {
+  name: string;
+  description?: string | null;
+  source?: string | null;
+  flux: { limiter: string; correction: unknown };
+  time: { method: "one_step" | "rk"; tableau?: { a: number[][]; b: number[] } | null };
+  claims: { order: number; max_cfl: number; tvd: boolean };
+}
+
+export interface LibraryScheme {
+  name: string;
+  document: SchemeIR;
+  digest: string;
+  hand_written: boolean;
+}
+
+// -- experiments, jobs, approvals -------------------------------------------------
+
+export type Evidence = "green" | "yellow" | "red" | "unknown";
+
+export type ExperimentState =
+  | "awaiting_approval"
+  | "executing"
+  | "evaluating"
+  | "reported"
+  | "failed"
+  | "rejected"
+  | "cancelled";
+
+export interface VariantSpec {
+  role: "baseline" | "candidate";
+  label: string;
+  params: Record<string, unknown> & { scheme: string; scheme_ir?: SchemeIR | null };
+}
+
+export interface ExperimentSpec {
+  title: string;
+  benchmark: string;
+  objective: "accuracy" | "performance";
+  host_id: string;
+  backend: string;
+  goal_id?: string | null;
+  research_item_id?: string | null;
+  hypothesis?: string | null;
+  timeout_seconds: number;
+  variants: VariantSpec[];
+}
+
+export interface Assumption {
+  claim: string;
+  claimed?: unknown;
+  measured?: unknown;
+  holds: boolean | null;
+  allowance?: number;
+}
+
+export interface VariantEvaluation {
+  label: string;
+  role: "baseline" | "candidate";
+  job_id: string;
+  job_state: string;
+  metrics: Record<string, unknown>;
+  backend: string | null;
+  device: string | null;
+  assumptions: Assumption[];
+}
+
+export interface Check {
+  name: string;
+  passed: boolean | null;
+  detail: string;
+}
+
+export interface CandidateVerdict {
+  label: string;
+  evidence: Evidence;
+  checks: Check[];
+  summary: string;
+}
+
+export interface ValidationReport {
+  experiment_id: string;
+  title: string;
+  benchmark: string;
+  evidence: Evidence;
+  summary: string;
+  variants: VariantEvaluation[];
+  verdicts: CandidateVerdict[];
+  provenance: Record<string, unknown>;
+  report_path?: string | null;
+}
+
+export type JobState =
+  | "pending_approval"
+  | "queued"
+  | "submitting"
+  | "running"
+  | "collecting"
+  | "succeeded"
+  | "failed"
+  | "timed_out"
+  | "cancelled"
+  | "rejected";
+
+export interface BenchmarkRun {
+  nx: number;
+  dx?: number;
+  cells?: number;
+  steps?: number;
+  l2_error?: number;
+  linf_error?: number;
+  runtime_s?: number;
+  [extra: string]: unknown;
+}
+
+export interface Job {
+  id: string;
+  experiment_id: string | null;
+  host_id: string;
+  role: string;
+  label: string;
+  state: JobState;
+  attempt: number;
+  error: string | null;
+  metrics: Record<string, unknown> | null;
+  results: {
+    scheme?: string;
+    backend?: string;
+    runs?: BenchmarkRun[];
+    environment?: Record<string, unknown>;
+    assumptions?: Assumption[];
+    plots?: string[];
+    [extra: string]: unknown;
+  } | null;
+  manifest: Record<string, unknown>;
+  started_at: Timestamp | null;
+  finished_at: Timestamp | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface Experiment {
+  id: string;
+  goal_id: string | null;
+  research_item_id: string | null;
+  host_id: string;
+  title: string;
+  spec: ExperimentSpec;
+  state: ExperimentState;
+  evaluation: ValidationReport | null;
+  evidence: Evidence | null;
+  report_path: string | null;
+  error: string | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+  jobs?: Job[];
+  approval?: { id: string; status: ApprovalStatus } | null;
+}
+
+export interface LogChunk {
+  data: string;
+  offset: number;
+  next_offset: number;
+  size?: number;
+  eof?: boolean;
+}
+
+export type ApprovalStatus = "pending" | "approved" | "rejected";
+export type ApprovalKind = "execute_experiment" | "start_service" | "publish_report";
+
+export interface Approval {
+  id: string;
+  kind: ApprovalKind | string;
+  subject_type: string;
+  subject_id: string;
+  title: string;
+  details: Record<string, unknown>;
+  status: ApprovalStatus;
+  decision_note?: string | null;
+  decided_at?: Timestamp | null;
+  created_at: Timestamp;
+}
+
+// -- models -----------------------------------------------------------------------------
+
+export type ServiceState =
+  | "awaiting_approval"
+  | "approved"
+  | "starting"
+  | "ready"
+  | "draining"
+  | "stopping"
+  | "stopped"
+  | "failed"
+  | "lost"
+  | "rejected"
+  | "cancelled";
+
+export interface Service {
+  id: string;
+  host_id: string;
+  name: string;
+  spec: {
+    engine: string;
+    model: string;
+    revision?: string | null;
+    memory_gb: number;
+    context_length: number;
+    parallel: number;
+    [extra: string]: unknown;
+  };
+  state: ServiceState;
+  remote_state: string | null;
+  healthy: boolean | null;
+  remote_port: number | null;
+  local_port: number | null;
+  error: string | null;
+  ready_at: Timestamp | null;
+  endpoint: { base_url: string; auth: "bearer" | "none"; reachable: boolean | null } | null;
+  auth_note?: string;
+  created_at: Timestamp;
+}
+
+export interface RouterModel {
+  id: string;
+  object: string;
+  newton: {
+    revisions: Array<string | null>;
+    services: Array<{
+      id: string;
+      host_id: string;
+      state: string;
+      engine: string;
+      revision: string | null;
+      routable: boolean;
+      paused: boolean;
+      in_flight: number;
+      parallel: number;
+    }>;
+  };
+}
+
+export interface RouterLease {
+  host_id: string;
+  job_id: string;
+  granted: boolean;
+  in_flight: number;
+  waiting_on: string | null;
+  caveats: string[];
+  [extra: string]: unknown;
+}
+
+export interface RouterStatus {
+  leases: RouterLease[];
+  in_flight: number;
+  waiting: number;
+  models: RouterModel[];
+}
+
+export interface RouterRequest {
+  id: string;
+  path: string;
+  model_requested: string | null;
+  service_id: string | null;
+  host_id: string | null;
+  engine: string | null;
+  model: string | null;
+  revision: string | null;
+  stream: number;
+  status: number | null;
+  error: string | null;
+  attempts: number;
+  queued_ms: number | null;
+  first_byte_ms: number | null;
+  duration_ms: number | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  created_at: Timestamp;
+}
+
+// -- profile, publishing --------------------------------------------------------------
+
+export interface Profile {
+  display_name: string | null;
+  default_model: string | null;
+  mac_models: boolean;
+  updated_at: Timestamp;
+}
+
+export interface RouterCredentials {
+  base_url: string;
+  api_key: string;
+  note?: string;
+}
+
+export interface Connectors {
+  github: boolean;
+  notion: boolean;
+}
+
+export type PublicationState =
+  | "awaiting_approval"
+  | "approved"
+  | "publishing"
+  | "published"
+  | "rejected"
+  | "failed";
+
+export interface Publication {
+  id: string;
+  experiment_id: string;
+  target: "github" | "notion";
+  destination: Record<string, unknown>;
+  state: PublicationState;
+  url: string | null;
+  error: string | null;
+  content_sha256: string;
+  created_at: Timestamp;
 }
