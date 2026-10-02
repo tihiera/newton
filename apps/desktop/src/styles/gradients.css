@@ -22,6 +22,10 @@
   position: relative;
   z-index: 1;
 }
+/* A row whose menu is open goes above the rows after it (each row is its own layer). */
+.mesh-header > *:has(.goal-menu-list) {
+  z-index: 5;
+}
 
 .mesh-card {
   background:
