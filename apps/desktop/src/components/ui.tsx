@@ -1,6 +1,7 @@
 // Small presentation components shared by every feature. No data fetching here.
 
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AgentdError, type Evidence } from "../api";
 import { Icon } from "./Icon";
 import { EVIDENCE, stateLabel, TABLES, type Tone } from "./labels";
@@ -156,24 +157,35 @@ export function Modal({
   onClose,
   children,
   wide,
+  large,
   label,
 }: {
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  /** Nearly the whole window (a report to read). */
+  large?: boolean;
   label: string;
 }) {
   useEscape(onClose);
-  return (
+  // Rendered on the window, not inside the panel that opened it: a panel's blur
+  // (backdrop-filter) would otherwise confine the dialog to that panel.
+  return createPortal(
     <>
       <div className="scrim" onClick={onClose} />
-      <div className={`modal mesh-card ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-label={label}>
+      <div
+        className={`modal mesh-card ${wide ? "wide" : ""} ${large ? "large" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+      >
         <button className="icon-btn modal-close" onClick={onClose} aria-label="Close">
           <Icon name="x" />
         </button>
         {children}
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
@@ -189,7 +201,7 @@ export function Drawer({
   footer?: ReactNode;
 }) {
   useEscape(onClose);
-  return (
+  return createPortal(
     <>
       <div className="scrim" onClick={onClose} />
       <aside
@@ -209,7 +221,8 @@ export function Drawer({
         <div className="drawer-body">{children}</div>
         {footer ? <div className="drawer-foot">{footer}</div> : null}
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }
 

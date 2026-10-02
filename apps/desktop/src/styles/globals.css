@@ -974,6 +974,11 @@ a:hover {
 .modal.wide {
   width: min(860px, 94vw);
 }
+.modal.large {
+  width: min(1200px, 94vw);
+  height: 92vh;
+  max-height: 92vh;
+}
 .modal-body {
   overflow-y: auto;
   overflow-x: hidden;

@@ -22,7 +22,7 @@ export function ReportModal({
   });
   const loadImage = useCallback((src: string) => api.experiments.reportFile(experimentId, src), [experimentId]);
   return (
-    <Modal onClose={onClose} wide label={`Report: ${title}`}>
+    <Modal onClose={onClose} large label={`Report: ${title}`}>
       <div className="modal-body">
         {report.data !== undefined ? (
           <Markdown text={report.data} loadImage={loadImage} />
