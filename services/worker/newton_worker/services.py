@@ -495,6 +495,12 @@ class ServiceStore:
             "total_bytes": mem["total"],
         }
         out["model_present"] = model_present(spec, self.root)
+        if not out["model_present"] and spec["engine"] == "ollama":
+            from .installed import find_reusable  # here: installed imports this module
+
+            if find_reusable(spec["model"], str(spec["revision"]), self.root) is not None:
+                out["model_present"] = True  # hard-linked from the host's Ollama store
+                out["reused_from"] = "ollama"
         # Would it start at all? Checked before anyone is asked to approve it.
         out["engine_installed"] = engine_executable(spec["engine"]) is not None
         if gated(spec):

@@ -15,12 +15,15 @@ export function ReaderModel({
   services,
   hosts,
   onSaved,
+  onStart,
 }: {
   profile: Profile | undefined;
   router: RouterStatus | undefined;
   services: Service[] | undefined;
   hosts: Host[] | undefined;
   onSaved: () => void;
+  /** Open the new-service form with this model picked (the reader isn't served). */
+  onStart: (model: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [model, setModel] = useState("");
@@ -49,6 +52,12 @@ export function ReaderModel({
             </Chip>
           </div>
         </div>
+        {!editing && line.model && line.label === "Not served" ? (
+          <button className="btn primary" onClick={() => onStart(line.model ?? "")}>
+            <Icon name="play" size={16} />
+            Start it
+          </button>
+        ) : null}
         {!editing ? (
           <button
             className="btn"

@@ -373,6 +373,16 @@ All paths are relative to `base_url`. JSON in and out unless noted.
 - **`/v1/*`** is the OpenAI-compatible endpoint, for tools rather than the UI. The UI
   may use `GET /v1/models`.
 
+- **Choosing a model instead of typing one.**
+  - `GET /hosts/{id}/models`: what that machine already has, from its worker's scan:
+    `[{engine, model, revision, size_bytes, memory_gb_hint, where, ready}]`, `where` is
+    `newton` (Newton's own store: starts with no download), `ollama` (the machine's own
+    Ollama store: `ready` when its files can be hard-linked, so no download and no
+    approval; else Newton downloads its own copy) or `huggingface` (downloaded again).
+  - `GET /models/catalog`: ten well-known Ollama models to start with one click, each
+    pinned to its manifest digest: `[{engine, model, revision, size_bytes,
+    memory_gb_hint, note}]`. Picking one fills `POST /services` (download = approval).
+
 ### 5.5 Profile and settings
 
 - `GET /profile` returns `{display_name, default_model, mac_models, updated_at}`.

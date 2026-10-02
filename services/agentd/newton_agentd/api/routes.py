@@ -39,6 +39,7 @@ from ..research.experiment_design import BENCHMARKS
 from ..research.loop import next_poll
 from ..research.papers import PaperError
 from ..runners.ssh_config import list_config_hosts
+from ..serving import catalog as serving_catalog
 from ..serving.router import PATHS as ROUTER_PATHS
 from ..serving.router import RouterError
 from ..storage.db import dumps, loads, new_id, now
@@ -173,6 +174,23 @@ async def install_gpu_support(
 @router.get("/services")
 async def list_services(request: Request, host_id: str | None = None) -> list[dict[str, Any]]:
     return ctx_of(request).services.list(host_id)
+
+
+@router.get("/models/catalog")
+async def model_catalog() -> list[dict[str, Any]]:
+    """Well-known models to start with one click, each pinned to a manifest digest."""
+    return serving_catalog.catalog()
+
+
+@router.get("/hosts/{host_id}/models")
+async def host_models(request: Request, host_id: str) -> list[dict[str, Any]]:
+    """The models a machine already has: Newton's own store (no download), and its own
+    Ollama / Hugging Face stores (see newton_worker.installed)."""
+    ctx = ctx_of(request)
+    ctx.hosts.get(host_id)  # 404 for an unknown host
+    answer = await ctx.services.worker(host_id, "GET", "/models/installed", timeout=60)
+    models: list[dict[str, Any]] = answer.get("models") or []
+    return models
 
 
 @router.post("/services", status_code=201)

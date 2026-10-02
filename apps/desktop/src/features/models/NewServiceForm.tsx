@@ -7,6 +7,8 @@ import { useNav } from "../../app/navigation";
 import { useAction } from "../../hooks/useAction";
 import { Icon } from "../../components/Icon";
 import { ErrorNote, Field, fieldError, Note, Spinner } from "../../components/ui";
+import { serviceName, type ModelPick } from "./choices";
+import { ModelChoices } from "./ModelChoices";
 
 const ENGINES = ["ollama", "vllm", "mlx", "fake"] as const;
 
@@ -34,14 +36,18 @@ const EMPTY: Form = {
 
 const numberOrUndefined = (s: string) => (s.trim() === "" ? undefined : Number(s));
 
+/** `initialModel`: start this model (the reader's "Start it"): picked from the machine
+ *  or the catalog as soon as they are known. */
 export function NewServiceForm({
   hosts,
   onCreated,
   onClose,
+  initialModel,
 }: {
   hosts: Host[] | undefined;
   onCreated: () => void;
   onClose: () => void;
+  initialModel?: string;
 }) {
   const nav = useNav();
   const [form, setForm] = useState<Form>(EMPTY);
@@ -49,6 +55,16 @@ export function NewServiceForm({
   // Until the user picks one: the first SSH machine (a GPU box), else the first machine.
   const hostId = form.host_id || (hosts?.find((h) => h.kind === "ssh")?.id ?? hosts?.[0]?.id ?? "");
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const pick = (p: ModelPick) =>
+    setForm((f) => ({
+      ...f,
+      engine: p.engine,
+      model: p.model,
+      revision: p.revision,
+      memory_gb: String(p.memory_gb),
+      name: f.name || serviceName(p.model),
+    }));
+  const hostName = hosts?.find((h) => h.id === hostId)?.name ?? "this machine";
 
   const create = useAction(async () => {
     const settings: Record<string, unknown> = {
@@ -152,6 +168,20 @@ export function NewServiceForm({
             ))}
           </select>
         </Field>
+        <div className="span-2">
+          <Field label="Choose a model">
+            <ModelChoices
+              hostId={hostId}
+              hostName={hostName}
+              selected={`${form.model}@${form.revision}`}
+              onPick={pick}
+              autoPick={initialModel}
+            />
+          </Field>
+          <div className="small muted" style={{ marginTop: 6 }}>
+            Or type it:
+          </div>
+        </div>
         <Field label="Name" error={fe("name")}>
           <input
             className={`input ${fe("name") ? "invalid" : ""}`}

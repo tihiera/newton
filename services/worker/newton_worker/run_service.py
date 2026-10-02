@@ -293,6 +293,8 @@ class Supervisor:
         model = self.spec["model"]
         # Already in the service's own store at the pinned digest (approved and pulled
         # before): no pull, so the service starts with no network at all.
+        if not self.stored():
+            self.reuse_local()
         pinned, entry, digest = self.pinned_digest() if self.stored() else (False, None, None)
         if not pinned:
             self.pull(deadline)
@@ -313,6 +315,16 @@ class Supervisor:
             self.http, "POST", "/api/generate", {"model": model, "keep_alive": -1},
             timeout=remaining,
         )  # fmt: skip
+
+    def reuse_local(self) -> None:
+        """The host's own Ollama already has this model at the pinned revision: hard-link
+        it into this store instead of downloading it again (nothing if it can't)."""
+        from .installed import reuse_ollama
+
+        try:
+            reuse_ollama(self.spec["model"], str(self.spec["revision"]), self.dir.parent.parent)
+        except OSError:
+            pass  # the pull below downloads it, as approved
 
     def stored(self) -> bool:
         """Is the model's manifest in this service's Ollama store? The service directory

@@ -466,6 +466,29 @@ export interface Service {
   created_at: Timestamp;
 }
 
+/** A model a machine already has (GET /hosts/{id}/models). `where`: Newton's own store
+ *  (starts with no download), the machine's own Ollama store (reused when `ready`, else
+ *  downloaded again), or the Hugging Face cache (downloaded again). */
+export interface MachineModel {
+  engine: "ollama" | "mlx" | "vllm";
+  model: string;
+  revision: string;
+  size_bytes: number;
+  memory_gb_hint: number;
+  where: "newton" | "ollama" | "huggingface";
+  ready: boolean;
+}
+
+/** A well-known model to start with one click (GET /models/catalog), pinned. */
+export interface CatalogModel {
+  engine: "ollama";
+  model: string;
+  revision: string;
+  size_bytes: number;
+  memory_gb_hint: number;
+  note: string;
+}
+
 export interface RouterModel {
   id: string;
   object: string;

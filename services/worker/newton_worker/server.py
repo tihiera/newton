@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
-from . import PROTOCOL_VERSION, __version__, source_digest
+from . import PROTOCOL_VERSION, __version__, installed, source_digest
 from .fsutil import write_json_atomic
 from .hardware import probe
 from .jobs import JobError, JobStore
@@ -204,6 +204,8 @@ class Handler(BaseHTTPRequestHandler):
             }
         if method == "GET" and parts == ["hardware"]:
             return probe(store.root)
+        if method == "GET" and parts == ["models", "installed"]:
+            return {"models": installed.scan(store.root)}
         if parts == ["jobs"]:
             if method == "GET":
                 return store.list()

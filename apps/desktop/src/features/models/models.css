@@ -136,3 +136,42 @@
   border-radius: var(--radius);
   background: var(--surface-sunken);
 }
+
+/* "Choose a model": the machine's models, then the catalog; one click fills the form. */
+.model-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.model-choice-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px;
+}
+.model-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  font: inherit;
+}
+.model-choice:hover {
+  border-color: var(--border-strong);
+}
+.model-choice.selected {
+  border-color: var(--lavender, #b9a7f0);
+}
+.model-choice-name {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}

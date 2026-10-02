@@ -17,6 +17,8 @@ import type {
   Job,
   LibraryScheme,
   LogChunk,
+  CatalogModel,
+  MachineModel,
   LibraryExperimentCreate,
   Readiness,
   NotionPage,
@@ -56,6 +58,10 @@ export function createApi(c: AgentdClient = agentd) {
       update: (id: string, body: Partial<GoalCreate> & { status?: GoalStatus }) =>
         c.request<Goal>(`/goals/${id}`, { method: "PATCH", body }),
       poll: (id: string) => post<PollSummary>(`/goals/${id}/poll`),
+    },
+    /** Models to choose instead of typing: the starter catalog. */
+    models: {
+      catalog: (signal?: AbortSignal) => get<CatalogModel[]>("/models/catalog", undefined, signal),
     },
     /** What this Mac can do now (engine, CPU, Metal, reader, GPU box, Keychain). */
     readiness: (signal?: AbortSignal) => get<Readiness>("/readiness", undefined, signal),
@@ -114,6 +120,8 @@ export function createApi(c: AgentdClient = agentd) {
     // -- hosts ----------------------------------------------------------------------
     hosts: {
       list: (signal?: AbortSignal) => get<Host[]>("/hosts", undefined, signal),
+      /** The models a machine already has (scanned by its worker). */
+      models: (id: string, signal?: AbortSignal) => get<MachineModel[]>(`/hosts/${id}/models`, undefined, signal),
       sshConfig: () => get<SshConfigHost[]>("/ssh/hosts"),
       create: (body: { name: string; ssh_target: string; ssh_port?: number | string; gpu_support?: string }) =>
         post<Host>("/hosts", body),
