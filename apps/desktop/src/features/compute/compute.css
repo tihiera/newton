@@ -1,0 +1,192 @@
+/* Compute drawer (mockup 05): milky host cards with a soft device tile. */
+
+.compute-heading {
+  margin: 14px 0 16px;
+  font-weight: 500;
+}
+.host-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 18px 14px;
+}
+.host-main {
+  display: grid;
+  grid-template-columns: 104px 1fr auto;
+  gap: 18px;
+  align-items: center;
+}
+.host-art {
+  width: 104px;
+  height: 104px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-2);
+  border: 1px solid var(--border);
+}
+.host-art.local {
+  background:
+    radial-gradient(70% 60% at 30% 35%, rgba(251, 230, 162, 0.7), transparent 70%),
+    radial-gradient(70% 60% at 70% 65%, rgba(248, 201, 221, 0.6), transparent 70%),
+    radial-gradient(60% 60% at 80% 20%, rgba(199, 220, 247, 0.7), transparent 70%),
+    #f8f6f3;
+}
+.host-art.remote {
+  background:
+    radial-gradient(70% 60% at 30% 70%, rgba(216, 205, 246, 0.55), transparent 70%),
+    radial-gradient(60% 60% at 75% 30%, rgba(199, 220, 247, 0.6), transparent 70%),
+    #f5f3ef;
+}
+.host-info {
+  min-width: 0;
+}
+.host-name {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+.host-line {
+  color: var(--muted);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.host-line.mono {
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+.host-chips {
+  margin-top: 10px;
+  gap: 8px;
+}
+.host-primary .btn {
+  min-width: 96px;
+}
+.host-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding-left: 2px;
+}
+.host-actions {
+  gap: 2px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin: 0 -6px;
+}
+.btn.small-btn {
+  padding: 6px 11px;
+  font-size: 13px;
+  gap: 6px;
+  color: var(--ink-2);
+}
+.btn.small-btn.active {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--border-strong);
+}
+.btn.small-btn.danger {
+  color: var(--red);
+}
+.host-error {
+  font-size: 13px;
+}
+.cap-reason {
+  padding-left: 2px;
+}
+.compute-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.compute-ok {
+  background: var(--mint-soft);
+  color: #2d6a2a;
+  align-items: center;
+}
+.hostkey-card {
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  border: 1px solid #d9cdf6;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(216, 205, 246, 0.35), transparent 60%),
+    radial-gradient(120% 140% at 100% 0%, rgba(199, 220, 247, 0.35), transparent 60%),
+    #fff;
+}
+.fingerprints {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  word-break: break-all;
+}
+.host-settings,
+.confirm-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
+.compute-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 4px 16px;
+  font-size: 14px;
+}
+.add-machine-btn {
+  margin-bottom: 4px;
+}
+.add-machine .card-head {
+  align-items: flex-start;
+}
+.ssh-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.ssh-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  border-top: 1px solid var(--border);
+}
+.ssh-row:first-child {
+  border-top: 0;
+}
+.ssh-alias {
+  font-weight: 520;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ssh-target {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compute-divider {
+  height: 1px;
+  background: var(--border-strong);
+  margin: 22px 0 8px;
+}
+.reader-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 18px;
+}
+.reader-title {
+  font-size: 19px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

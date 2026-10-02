@@ -1,0 +1,165 @@
+/* Approvals: review dialog, drawer cards and detail rows (mockups 03, 07). */
+
+.ap-row {
+  grid-template-columns: 56px 1fr auto;
+  align-items: start;
+}
+.ap-row .icon-tile {
+  width: 52px;
+  height: 52px;
+}
+.ap-strong {
+  color: var(--ink-2);
+  font-size: 15px;
+}
+.ap-sep {
+  margin: 0 8px;
+  color: var(--faint);
+}
+.ap-pairs {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 18px;
+  margin-top: 4px;
+  font-size: 14px;
+}
+.ap-pair-val {
+  color: var(--ink-2);
+  min-width: 0;
+  word-break: break-word;
+}
+.ap-generic {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 4px 16px;
+}
+.ap-generic-row {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.ap-generic-row:first-child {
+  border-top: 0;
+}
+.ap-generic-key {
+  color: var(--muted);
+}
+.ap-generic-val {
+  word-break: break-word;
+}
+.ap-generic-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+}
+.ap-all > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 6px 4px;
+  list-style: none;
+}
+.ap-all > summary::before {
+  content: "›";
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform 0.15s;
+}
+.ap-all[open] > summary::before {
+  transform: rotate(90deg);
+}
+.ap-all[open] > summary {
+  margin-bottom: 6px;
+}
+
+.ap-review-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 22px;
+}
+.ap-review-head .icon-tile {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 14px;
+  background: var(--yellow);
+}
+.ap-review-head.centered {
+  align-items: center;
+  text-align: center;
+}
+.ap-review-title {
+  margin-top: 8px;
+}
+.ap-modal-foot {
+  display: block;
+  padding-top: 4px;
+}
+.ap-actions {
+  flex-wrap: nowrap;
+}
+.ap-actions-note {
+  flex: 1;
+  min-width: 0;
+}
+.ap-foot-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.ap-reject {
+  min-width: 110px;
+}
+.ap-note {
+  border-radius: var(--pill);
+}
+.ap-decided {
+  margin-top: 16px;
+}
+
+.ap-preview {
+  max-height: 340px;
+  border: 1px solid var(--border);
+}
+.ap-preview .md h1 {
+  font-size: 26px;
+}
+.ap-preview-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ap-card {
+  padding: 20px;
+}
+.ap-card .detail-row {
+  grid-template-columns: 48px 1fr auto;
+  padding: 12px 14px;
+}
+.ap-card .ap-row .icon-tile {
+  width: 44px;
+  height: 44px;
+}
+.ap-card .facts {
+  grid-auto-flow: row;
+  grid-template-columns: 1fr 1fr;
+}
+.ap-card .fact:nth-child(odd) {
+  border-left: 0;
+}
