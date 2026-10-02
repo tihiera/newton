@@ -305,10 +305,11 @@ a:hover {
 }
 .workspace-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   overflow-wrap: anywhere;
-  padding: 26px 30px 40px;
+  padding: 6px 30px 40px;
 }
 .workspace-top {
   display: flex;
@@ -1205,11 +1206,16 @@ a:hover {
   }
 }
 
-.approvals-slot {
-  position: absolute;
-  top: 22px;
-  right: 26px;
-  z-index: 5;
+/* The workspace's top bar (back link, Approvals): fixed; the view scrolls under it. */
+.workspace-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 26px 6px 30px;
+}
+.workspace-bar .pw-back {
+  margin-bottom: 0;
 }
 .approvals-btn {
   padding: 10px 18px;

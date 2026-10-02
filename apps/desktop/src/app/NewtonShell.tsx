@@ -17,7 +17,7 @@ import { PaperWorkspace } from "../features/papers/PaperWorkspace";
 import { SettingsDialog } from "../features/settings/SettingsDialog";
 import { Sidebar } from "../features/sidebar/Sidebar";
 import { Icon } from "../components/Icon";
-import { useApprovals } from "./data";
+import { useApprovals, useGoals } from "./data";
 import { useNav } from "./navigation";
 
 function ApprovalsButton() {
@@ -37,6 +37,27 @@ function ApprovalsButton() {
   );
 }
 
+/** The workspace's top bar: it stays put while the view under it scrolls. A paper or
+ *  an experiment opened on its own gets a way back (to its research, or Papers). */
+function WorkspaceBar() {
+  const nav = useNav();
+  const goals = useGoals();
+  const goal = nav.goalId ? goals.data?.find((g) => g.id === nav.goalId) : undefined;
+  const back = nav.paperId ? () => nav.selectPaper(null) : nav.experimentId ? () => nav.showExperiment(null) : null;
+  return (
+    <div className="workspace-bar">
+      {back ? (
+        <button className="pw-back" onClick={back}>
+          <Icon name="chevronLeft" size={15} />
+          {nav.goalId ? (goal?.title ?? "Research") : "Papers"}
+        </button>
+      ) : null}
+      <span className="spacer" />
+      <ApprovalsButton />
+    </div>
+  );
+}
+
 export function NewtonShell() {
   const nav = useNav();
   const o = nav.overlay;
@@ -46,9 +67,7 @@ export function NewtonShell() {
       <Sidebar />
       <PaperInbox />
       <main className="panel workspace">
-        <div className="approvals-slot">
-          <ApprovalsButton />
-        </div>
+        <WorkspaceBar />
         {nav.paperId ? (
           <PaperWorkspace key={nav.paperId} paperId={nav.paperId} />
         ) : nav.experimentId ? (
