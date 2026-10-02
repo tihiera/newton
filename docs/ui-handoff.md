@@ -199,6 +199,8 @@ All paths are relative to `base_url`. JSON in and out unless noted.
   - Sections: results table, verdicts, "Speed and roofline", "Assumption checks",
     "Provenance".
   - Report images: `GET /experiments/{id}/report/files/{path}`.
+  - `GET /experiments/{id}/export`: a zip of `report.md`, `report.json` (the
+    ValidationReport) and the report's files; 409 until the experiment is reported.
 - `POST /experiments/{id}/cancel`.
 - **ValidationReport** (`experiment.evaluation`):
 
@@ -269,7 +271,8 @@ All paths are relative to `base_url`. JSON in and out unless noted.
 - **`GET /research/items?goal_id=`** and **`GET /research/items/{id}`** return items:
   `{id, goal_id, kind: "paper", title, source: "arxiv", external_id, state, data,
   created_at}`, where `data` holds:
-  - `paper: {arxiv_id, title, abstract, authors[], published, categories[], url}`
+  - `paper: {arxiv_id, title, abstract, authors[], published, categories[], url,
+    journal_ref, doi}` (`journal_ref`/`doi` from arXiv, null when the authors gave none)
   - `text: {from: "html"|"pdf", characters, sha256}`
   - `triage: {relevant, why}` (from the research loop)
   - `card`:
@@ -279,10 +282,18 @@ All paths are relative to `base_url`. JSON in and out unless noted.
     - `claims: [{kind, text}]`, `benchmarks: []`
   - `scheme_ir`: the SchemeIR Newton mapped from the card, or null
   - `scheme_note`: "mapped onto Newton's IR", or why not
-  - `extraction`: provenance, i.e. which model, service, host and router request
+  - `extraction`: provenance, i.e. which model, service, host and router request,
+    `characters_read` and the reader's `context_length` (the paper is cut to fit it)
   - `error`, `proposal_note`
-- **`POST /research/items/{id}/propose {host_id?, backend?, baseline?, initial_condition?}`**
-  creates the experiment the card suggests, awaiting approval.
+- **`POST /research/items/{id}/propose {host_id?, backend?, baseline?, initial_condition?,
+  retest?}`** creates the experiment the card suggests, awaiting approval. Works for a
+  `carded` paper and again for a `reported` one (another baseline, machine, …).
+  - Scientific memory: the same scheme (`method_digest`) already tested gives
+    `409 {error, code: "already_tested", experiment_id}`; already planned elsewhere gives
+    `409 {error, code: "already_planned", research_item_id}`. Show the sentence and
+    offer "Propose anyway", which sends `retest: true`.
+  - A rejected, cancelled or failed experiment puts its paper back to `carded` (or
+    `reported` when it was tested before).
 - **`GET /findings?goal_id=`** is the scientific memory:
   - `[{experiment_id, research_item_id, scheme_name, evidence,
     claims: [{claim, claimed, holds}], summary, created_at}]`
@@ -341,6 +352,9 @@ All paths are relative to `base_url`. JSON in and out unless noted.
   - `github` gist: `{}`
   - `github` issue: `{kind: "issue", repo: "owner/name"}`
   - `notion`: `{parent_page_id: "<32 hex>"}`
+- `GET /connectors/notion/pages?query=` lists the pages the Notion integration can
+  write under: `[{id (32 hex), title, url, icon (emoji or null)}]`, last edited first;
+  `409 {code: "not_connected"}` without a token, `502` with Notion's own message.
 - `GET /publications?experiment_id=` returns
   `[{id, target, destination, state, url, error, content_sha256, created_at}]`.
 
@@ -421,8 +435,7 @@ All paths are relative to `base_url`. JSON in and out unless noted.
 - Benchmarks are linear advection only, in 1D and 2D.
 - The scheme IR covers three-point flux-form schemes: limiters, one-step or
   Runge-Kutta. Papers using WENO, DG and similar get a card but no experiment.
-- Typed response models for the UI are hand-written: `apps/desktop/src/api/types.ts`
-  covers `/health` and `/hosts`. Add the others from §5.
+- Typed response models for the UI are hand-written in `apps/desktop/src/api/types.ts`.
   `packages/contracts/*.schema.json` has the request schemas (ExperimentSpec,
   SchemeIR, ServiceCreate, GoalCreate, ProfileUpdate, …).
 

@@ -329,6 +329,20 @@ class Router:
         pinned, rev = same[0]["model"], same[0].get("revision")
         return name, f"model:{pinned}@{rev}", lambda e: e.model == pinned and e.revision == rev
 
+    def context_length(self, requested: str) -> int | None:
+        """The context the model is served with: the smallest among the ready services
+        serving it (a request may land on any), else among those that may soon serve
+        it. None when unknown, or when no service runs it. Reads only."""
+        try:
+            _, _, serves = self.resolve(requested)
+        except RouterError:
+            return None
+        lengths = [e.context_length for e in self.endpoints() if serves(e) and e.context_length]
+        if not lengths:
+            lengths = [k["context_length"] for k in self._known()
+                       if serves(_as_endpoint(k)) and k.get("context_length")]  # fmt: skip
+        return min(lengths) if lengths else None
+
     def _refuse_if_paused(self, serves: Callable[[Endpoint], bool]) -> None:
         """Every service for this model is on a leased host: say so now (a benchmark can
         run for an hour) instead of holding the client in the queue."""

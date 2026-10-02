@@ -84,7 +84,9 @@ def test_state_machines_reject_illegal_transitions() -> None:
         JOB.check("succeeded", "running")
     with pytest.raises(IllegalTransition):
         EXPERIMENT.check("awaiting_approval", "reported")
-    assert RESEARCH_ITEM.terminal == {"reported", "dismissed", "failed"}
+    # A reported paper can propose another experiment (U2), so "reported" isn't terminal.
+    assert RESEARCH_ITEM.terminal == {"dismissed", "failed"}
+    RESEARCH_ITEM.check("reported", "experiment_planned")
     path = ["discovered", "triaged", "awaiting_approval", "extracting",
             "experiment_planned", "executing", "evaluating", "reported"]  # fmt: skip
     for a, b in zip(path, path[1:], strict=False):

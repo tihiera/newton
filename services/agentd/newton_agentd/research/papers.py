@@ -10,7 +10,7 @@ those choices into a document. Anything it can't map is kept as a note, never ru
 Text and model output are data: nothing from a paper or a model is ever executed.
 
 States (research_item): discovered -> extracting -> carded | failed; a card can then
-propose an experiment (experiment_planned).
+propose an experiment (experiment_planned), and so can a reported paper (a new test).
 """
 
 from __future__ import annotations
@@ -45,7 +45,11 @@ NEW_ID = re.compile(r"(\d{4}\.\d{4,5})(v\d+)?")
 OLD_ID = re.compile(r"([a-z-]+(?:\.[A-Z]{2})?/\d{7})(v\d+)?")
 MAX_DOWNLOAD = 40 * 1024 * 1024
 TEXT_FOR_MODEL = 24_000  # characters of the paper the model reads (abstract + body)
-ATOM = {"a": "http://www.w3.org/2005/Atom"}
+CARD_TOKENS = 1200  # the model's answer (max_tokens)
+CHARS_PER_TOKEN = 3  # LaTeX-heavy text: fewer characters per token than prose
+CONTEXT_MARGIN = 256  # tokens kept free: chat template, tokenizers that count differently
+MIN_TEXT = 1000  # less of the paper than this isn't worth asking a model about
+ATOM = {"a": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 
 LIMITER_CHOICES = ("none", "minmod", "van_leer", "superbee", "mc", "koren", "other")
 TIME_CHOICES = ("one_step", "ssprk2", "ssprk3", "other")
@@ -81,6 +85,23 @@ Use "other" when none of the choices fits. Do not invent claims the paper does n
 
 class PaperError(ValueError):
     pass
+
+
+def text_budget(context_length: int | None, prompt_chars: int) -> int:
+    """How much of the paper the model reads: TEXT_FOR_MODEL at most, and no more than
+    fits its context next to the prompt and the answer (all of it when unknown)."""
+    if not context_length:
+        return TEXT_FOR_MODEL
+    room = (context_length - CARD_TOKENS - CONTEXT_MARGIN) * CHARS_PER_TOKEN - prompt_chars
+    return max(0, min(TEXT_FOR_MODEL, room))
+
+
+def _tokens_used(body: dict[str, Any]) -> int:
+    usage = body.get("usage")
+    if not isinstance(usage, dict):
+        return 0
+    counts = (usage.get("prompt_tokens"), usage.get("completion_tokens"))
+    return sum(v for v in counts if isinstance(v, int) and not isinstance(v, bool))
 
 
 def arxiv_id(text: str) -> str:
@@ -153,6 +174,8 @@ def parse_entry(entry: ET.Element, aid: str) -> dict[str, Any]:
         "published": text("a:published"),
         "categories": categories,
         "url": f"https://arxiv.org/abs/{aid}",
+        "journal_ref": text("arxiv:journal_ref") or None,
+        "doi": text("arxiv:doi") or None,
     }
 
 
@@ -454,23 +477,42 @@ class Papers:
 
     async def extract(self, meta: dict[str, Any], text: str, model: str
                       ) -> tuple[dict[str, Any], dict[str, Any]]:  # fmt: skip
-        body = text[:TEXT_FOR_MODEL]
         prompt = PROMPT % {"limiters": list(LIMITER_CHOICES), "times": list(TIME_CHOICES),
                            "kinds": list(CLAIM_KINDS)}  # fmt: skip
+        head = f"Title: {meta['title']}\n\nAbstract: {meta['abstract']}\n\nPaper:\n"
+        # The paper is cut to the reader's context: a prompt longer than the context is
+        # truncated by the engine (or refused), and the card comes back cut, or empty.
+        context = self.router.context_length(model)
+        budget = text_budget(context, len(prompt) + len(head))
+        if budget < min(MIN_TEXT, len(text)):
+            raise PaperError(f"the model's context ({context} tokens) is too short to read a "
+                             "paper: give the reader service a longer context_length")  # fmt: skip
+        body = text[:budget]
         result = await self.router.complete({
-            "model": model, "temperature": 0, "max_tokens": 1200,
+            "model": model, "temperature": 0, "max_tokens": CARD_TOKENS,
             "messages": [
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": f"Title: {meta['title']}\n\nAbstract: "
-                                            f"{meta['abstract']}\n\nPaper:\n{body}"},
+                {"role": "user", "content": head + body},
             ],
         })  # fmt: skip
-        content = ((result["body"].get("choices") or [{}])[0].get("message") or {}).get(
-            "content"
-        ) or ""
-        card = parse_card(content)
+        choice = (result["body"].get("choices") or [{}])[0]
+        content = (choice.get("message") or {}).get("content") or ""
+        try:
+            card = parse_card(content)
+        except PaperError:
+            used = _tokens_used(result["body"])
+            # The context filled up (the engine cut the prompt, or the answer): say so,
+            # not "not valid JSON", which reads as a model that can't follow orders.
+            filled = bool(context) and used >= (context or 0) - CONTEXT_MARGIN // 4
+            if filled or choice.get("finish_reason") == "length":
+                size = f" ({context or used} tokens)" if context or used else ""
+                raise PaperError(f"the paper didn't fit the model's context{size}: give the "
+                                 "reader service a longer context_length") from None  # fmt: skip
+            raise
         provenance = {**result["provenance"], "characters_read": len(body),
                       "at": now()}  # fmt: skip
+        if context:
+            provenance["context_length"] = context
         return card, provenance
 
 
@@ -480,7 +522,7 @@ def proposal(item: dict[str, Any], host_id: str, backend: str, baseline: str,
     in a grid-refinement study: order, conservation, TVD and stability get checked."""
     data = item["data"]
     doc = data.get("scheme_ir")
-    if item["state"] != "carded" or doc is None:
+    if item["state"] not in ("carded", "reported") or doc is None:
         raise PaperError(
             "only a carded paper whose method maps onto Newton's IR can propose an experiment"
             + (f" ({data.get('scheme_note')})" if data.get("scheme_note") else "")

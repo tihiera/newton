@@ -25,8 +25,10 @@ from typing import Any
 import httpx
 
 from ..config import Settings
+from ..errors import Conflict
 from ..orchestration.approvals import Approvals
 from ..orchestration.state_machine import record_event
+from ..runners.base import RunnerError
 from ..secrets import SecretStore
 from ..storage.db import Database, Row, dumps, loads, new_id, now
 
@@ -89,6 +91,38 @@ class Publisher:
         except (OSError, subprocess.SubprocessError) as e:
             raise PublishError(f"the GitHub CLI has no token to give: {e}") from None
         return self.connect("github", out.stdout.strip())
+
+    # -- Notion pages (to pick a parent page) -----------------------------------------------
+    async def notion_pages(self, query: str = "") -> list[dict[str, Any]]:
+        """The pages the user's integration can see, last edited first."""
+        token = await asyncio.to_thread(self.secrets.get, TOKENS["notion"])  # may block
+        if not token:
+            raise Conflict("Notion isn't connected", code="not_connected")
+        headers = {"Authorization": f"Bearer {token}", "Notion-Version": NOTION_VERSION}
+        body: dict[str, Any] = {
+            "filter": {"property": "object", "value": "page"}, "page_size": 50,
+            "sort": {"direction": "descending", "timestamp": "last_edited_time"},
+        }  # fmt: skip
+        if query.strip():
+            body["query"] = query.strip()
+        try:
+            async with self.http_factory() as http:
+                resp = await http.post(f"{NOTION_API}/search", headers=headers, json=body)
+        except httpx.HTTPError as e:
+            raise RunnerError(_safe(f"Notion couldn't be reached: {e}"), code="notion") from None
+        if resp.status_code != 200:
+            raise RunnerError(_safe(f"Notion answered {resp.status_code}: {_api_message(resp)}"),
+                              transient=False, code="notion")  # fmt: skip
+        try:
+            data = resp.json()
+        except ValueError:  # an HTML page from a proxy or captive portal, an empty body
+            data = None
+        results = data.get("results") if isinstance(data, dict) else None
+        if not isinstance(results, list):
+            raise RunnerError("Notion answered 200 with something that isn't a search result",
+                              transient=False, code="notion")  # fmt: skip
+        pages = [notion_page(p) for p in results if isinstance(p, dict)]
+        return [p for p in pages if p is not None]
 
     # -- requests ------------------------------------------------------------------------
     def request(
@@ -271,6 +305,26 @@ def _api_message(resp: httpx.Response) -> str:
 def _safe(text: str) -> str:
     """Never a token in an error message."""
     return re.sub(r"(gh[pousr]_|github_pat_|secret_|ntn_)[A-Za-z0-9_]+", "<token>", text)
+
+
+def notion_page(page: dict[str, Any]) -> dict[str, Any] | None:
+    """A search result as {id (32 hex), title, url, icon (an emoji, or none)}."""
+    page_id = str(page.get("id") or "").replace("-", "")
+    if page.get("object", "page") != "page" or not re.fullmatch(r"[0-9a-fA-F]{32}", page_id):
+        return None
+    title = ""
+    for prop in (page.get("properties") or {}).values():
+        if isinstance(prop, dict) and prop.get("type") == "title":
+            title = "".join(str(t.get("plain_text") or "") for t in prop.get("title") or []
+                            if isinstance(t, dict))  # fmt: skip
+            break
+    icon = page.get("icon")
+    icon = icon if isinstance(icon, dict) else {}
+    emoji = icon.get("emoji") if icon.get("type") == "emoji" else None
+    url = page.get("url")
+    return {"id": page_id.lower(), "title": title.strip() or "Untitled",
+            "url": url if isinstance(url, str) else None,
+            "icon": emoji if isinstance(emoji, str) else None}  # fmt: skip
 
 
 def _rich(text: str) -> list[dict[str, Any]]:

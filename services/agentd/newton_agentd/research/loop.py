@@ -9,6 +9,10 @@ when their method is new, proposed as experiments; what experiments show is kept
          an experiment, created for approval: nothing runs without the user
     every finished experiment that came from a paper -> a finding (scientific memory):
       the scheme, its evidence, claim by claim; the paper's item -> reported
+    the user proposes (a card, or a reported paper again): the same memory is checked,
+      unless they ask for a retest
+    a plan whose experiment ended unreported (rejected, cancelled, failed) is over: its
+      item goes back to carded (or reported, when it has findings) and can propose again
 
 arXiv asks for at most one API request every 3 seconds: the loop keeps to that, and
 reads at most MAX_NEW papers per goal per poll.
@@ -28,6 +32,7 @@ import httpx
 
 from ..config import Settings
 from ..contracts import ExperimentSpec
+from ..errors import Conflict, NotFound
 from ..orchestration.state_machine import RESEARCH_ITEM, ConcurrentTransition, record_event
 from ..storage.db import Database, dumps, loads, new_id, now
 from .papers import ARXIV_API, PaperError, Papers, _get, parse_feed, proposal
@@ -107,6 +112,7 @@ class ResearchLoop:
     async def poll(self, goal_id: str) -> dict[str, Any]:
         """Search, triage, card, propose. Returns what happened (also as events)."""
         async with self._lock:
+            self.record_findings()  # memory as of now: auto_propose checks it
             goal = self.db.query_one("SELECT * FROM goals WHERE id = ?", (goal_id,))
             if goal is None:
                 raise PaperError(f"unknown goal {goal_id}")
@@ -221,19 +227,54 @@ class ResearchLoop:
     def already_tested(self, digest: str, item_id: str) -> str | None:
         """Scientific memory: this method (flux and time stepping, whatever its name)
         was tested, or is about to be."""
+        seen = self.memory(digest, item_id)
+        return str(seen) if seen else None
+
+    def memory(self, digest: str, item_id: str) -> Conflict | None:
+        """already_tested(), with what it's about: a code and the experiment or item."""
+        # A run that showed nothing (evidence "unknown": e.g. the baseline didn't run)
+        # didn't test the scheme: it doesn't block testing it.
         found = self.db.query_one(
             "SELECT experiment_id, evidence FROM findings WHERE scheme_digest = ? "
-            "ORDER BY created_at DESC LIMIT 1", (digest,),
+            "AND evidence != 'unknown' ORDER BY created_at DESC LIMIT 1", (digest,),
         )  # fmt: skip
         if found:
-            return f"the same scheme was tested in {found['experiment_id']} ({found['evidence']})"
+            return Conflict(
+                f"the same scheme was tested in {found['experiment_id']} ({found['evidence']})",
+                code="already_tested", experiment_id=found["experiment_id"],
+            )  # fmt: skip
         for row in self.db.query(
             "SELECT id, data FROM research_items WHERE id != ? AND state IN "
             "('experiment_planned', 'executing', 'evaluating')", (item_id,),
         ):  # fmt: skip
             if (loads(row["data"]) or {}).get("method_digest") == digest:
-                return f"the same scheme is already planned (from {row['id']})"
+                return Conflict(f"the same scheme is already planned (from {row['id']})",
+                                code="already_planned", research_item_id=row["id"])  # fmt: skip
         return None
+
+    def propose(self, item_id: str, host_id: str, backend: str, baseline: str,
+                initial_condition: str, retest: bool = False) -> dict[str, Any]:  # fmt: skip
+        """The user's proposal: a card's experiment, or a reported paper's next one,
+        created for approval. Unless it's a retest, a scheme already tested (the
+        paper's own finding included) or already planned is refused (Conflict)."""
+        self.record_findings()  # an experiment that just reported or ended counts now
+        try:
+            item = self.papers.get(item_id)
+        except KeyError:
+            raise NotFound(f"no research item {item_id}") from None
+        spec = ExperimentSpec.model_validate(
+            proposal(item, host_id, backend, baseline, initial_condition)
+        )
+        digest = item["data"].get("method_digest")
+        seen = self.memory(digest, item_id) if digest and not retest else None
+        if seen is not None:
+            raise seen
+        experiment: dict[str, Any] = self.experiments.create(spec)
+        RESEARCH_ITEM.transition(self.db, item_id, item["state"], "experiment_planned",
+                                 {"updated_at": now()})  # fmt: skip
+        record_event(self.db, "research_item", item_id, "proposed",
+                     {"experiment_id": experiment["id"], "retest": retest})  # fmt: skip
+        return experiment
 
     def _move(self, item_id: str, src: str, dst: str) -> None:
         with contextlib.suppress(ConcurrentTransition):
@@ -281,6 +322,30 @@ class ResearchLoop:
                         self._move(item["id"], src, dst)
             record_event(self.db, "experiment", exp["id"], "finding",
                          {"evidence": verdict.get("evidence")})  # fmt: skip
+        self.settle_plans()
+        return len(rows)
+
+    def settle_plans(self) -> int:
+        """Plans whose newest experiment ended without a report (rejected, cancelled,
+        failed) are over: the item goes back to reported when it has findings, to carded
+        otherwise. So it can propose again, and isn't "already planned" for anyone."""
+        rows = self.db.query(
+            "SELECT i.id, e.id AS experiment_id, e.state AS experiment_state, EXISTS ("
+            "  SELECT 1 FROM findings f WHERE f.research_item_id = i.id) AS tested "
+            "FROM research_items i JOIN experiments e ON e.id = ("
+            "  SELECT x.id FROM experiments x WHERE x.research_item_id = i.id "
+            "  ORDER BY x.created_at DESC, x.rowid DESC LIMIT 1) "
+            "WHERE i.state = 'experiment_planned' "
+            "AND e.state IN ('rejected', 'cancelled', 'failed')"
+        )  # fmt: skip
+        for row in rows:
+            with contextlib.suppress(ConcurrentTransition):
+                RESEARCH_ITEM.transition(
+                    self.db, row["id"], "experiment_planned",
+                    "reported" if row["tested"] else "carded", {"updated_at": now()},
+                    {"experiment_id": row["experiment_id"],
+                     "experiment_state": row["experiment_state"]},
+                )  # fmt: skip
         return len(rows)
 
     def findings(self, goal_id: str | None = None) -> list[dict[str, Any]]:

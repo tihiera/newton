@@ -29,10 +29,11 @@ from ..contracts import (
 )
 from ..errors import NotFound
 from ..orchestration import jobs as jobs_mod
-from ..orchestration.state_machine import RESEARCH_ITEM, record_event
+from ..orchestration.state_machine import record_event
+from ..reporting.export import export as export_report
 from ..research import schemes as schemes_mod
 from ..research.experiment_design import BENCHMARKS
-from ..research.papers import PaperError, proposal
+from ..research.papers import PaperError
 from ..runners.ssh_config import list_config_hosts
 from ..serving.router import PATHS as ROUTER_PATHS
 from ..serving.router import RouterError
@@ -368,6 +369,7 @@ async def get_experiment(request: Request, exp_id: str) -> dict[str, Any]:
 async def cancel_experiment(request: Request, exp_id: str) -> dict[str, Any]:
     ctx = ctx_of(request)
     out = ctx.experiments.cancel(exp_id)
+    ctx.loop.settle_plans()  # its paper can be proposed again at once
     ctx.scheduler.wake()
     return out
 
@@ -388,6 +390,15 @@ async def experiment_report_file(request: Request, exp_id: str, path: str) -> Fi
     if not target.is_file():
         raise NotFound("no such file")
     return FileResponse(target)
+
+
+@router.get("/experiments/{exp_id}/export")
+async def export_experiment(request: Request, exp_id: str) -> Response:
+    """The report as a zip: report.md, report.json and the report's files."""
+    ctx = ctx_of(request)
+    name, data = await asyncio.to_thread(export_report, ctx.db, ctx.settings.reports_dir, exp_id)
+    return Response(data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})  # fmt: skip
 
 
 # -- jobs ----------------------------------------------------------------------
@@ -473,7 +484,10 @@ async def approve(
 async def reject(
     request: Request, approval_id: str, body: Decision | None = None
 ) -> dict[str, Any]:
-    return ctx_of(request).approvals.decide(approval_id, False, body.note if body else None)
+    ctx = ctx_of(request)
+    out = ctx.approvals.decide(approval_id, False, body.note if body else None)
+    ctx.loop.settle_plans()  # a rejected experiment's paper can be proposed again at once
+    return out
 
 
 # -- profile (no accounts: one person on one Mac) ----------------------------------
@@ -598,6 +612,7 @@ class ProposeRequest(BaseModel):
     backend: str = "auto"
     baseline: Literal["upwind", "lax_wendroff", "muscl_minmod", "muscl_vanleer"] = "upwind"
     initial_condition: Literal["sine", "gaussian", "square"] = "sine"
+    retest: bool = Field(default=False, description="test a scheme already tested or planned")
 
 
 @router.post("/research/ingest", status_code=202)
@@ -624,23 +639,14 @@ async def get_paper(request: Request, item_id: str) -> dict[str, Any]:
 @router.post("/research/items/{item_id}/propose", status_code=201)
 async def propose_experiment(request: Request, item_id: str,
                              body: ProposeRequest) -> dict[str, Any]:  # fmt: skip
-    """The experiment the card suggests, created for approval (nothing runs before)."""
-    ctx = ctx_of(request)
+    """The experiment the card suggests (or a reported paper's next one), created for
+    approval (nothing runs before). A scheme already tested or planned: 409, with its
+    code, unless retest."""
     try:
-        item = ctx.papers.get(item_id)
-    except KeyError:
-        raise NotFound(f"no research item {item_id}") from None
-    try:
-        spec = ExperimentSpec.model_validate(
-            proposal(item, body.host_id, body.backend, body.baseline, body.initial_condition)
-        )
+        return ctx_of(request).loop.propose(item_id, body.host_id, body.backend, body.baseline,
+                                            body.initial_condition, body.retest)  # fmt: skip
     except PaperError as e:
         raise ValueError(str(e)) from None
-    experiment = ctx.experiments.create(spec)
-    RESEARCH_ITEM.transition(ctx.db, item_id, "carded", "experiment_planned",
-                             {"updated_at": now()})  # fmt: skip
-    record_event(ctx.db, "research_item", item_id, "proposed", {"experiment_id": experiment["id"]})
-    return experiment
 
 
 # -- the research loop (B5) -------------------------------------------------------------
@@ -698,6 +704,15 @@ async def import_gh(request: Request) -> dict[str, bool]:
         return await asyncio.to_thread(ctx_of(request).publisher.import_gh_token)
     except PublishError as e:
         raise ValueError(str(e)) from None
+
+
+@router.get("/connectors/notion/pages")
+async def notion_pages(
+    request: Request, query: str = Query("", max_length=200)
+) -> list[dict[str, Any]]:
+    """Pages the Notion integration can see (to pick where a report goes), last edited first.
+    409 when Notion isn't connected; 502 with Notion's own answer when it refuses."""
+    return await ctx_of(request).publisher.notion_pages(query)
 
 
 @router.delete("/connectors/{target}")

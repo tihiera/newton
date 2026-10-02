@@ -17,7 +17,7 @@ from . import __version__
 from .api import routes
 from .config import Settings
 from .context import AppContext
-from .errors import NotFound
+from .errors import Conflict, NotFound
 from .orchestration.approvals import ApprovalAlreadyDecided, ApprovalNotFound
 from .orchestration.hosts import GpuSupportBusy, HostKeyUnknown, HostNotFound
 from .orchestration.jobs import JobNotFound
@@ -120,6 +120,8 @@ def create_app(
                 body["code"] = exc.code
             if isinstance(exc, HostKeyUnknown):
                 body["fingerprints"] = exc.keys
+            if isinstance(exc, Conflict):
+                body.update(exc.fields)
             return JSONResponse(body, status_code=status)
 
         return handle
@@ -127,6 +129,7 @@ def create_app(
     for exc_type, status in (
         (HostKeyUnknown, 409),
         (ServiceRefused, 409),
+        (Conflict, 409),
         (ServiceNotFound, 404),
         (GpuSupportBusy, 409),
         (NotFound, 404),

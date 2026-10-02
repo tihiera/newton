@@ -119,10 +119,13 @@ RESEARCH_ITEM = StateMachine(
         "awaiting_approval": _fs("extracting", "dismissed"),
         "extracting": _fs("carded", "experiment_planned", "failed", "dismissed"),
         "carded": _fs("experiment_planned", "dismissed"),
-        "experiment_planned": _fs("executing", "carded", "dismissed"),
+        # A plan whose experiment ended unreported (rejected, cancelled, failed) goes
+        # back: to carded, or to reported when the paper was tested before.
+        "experiment_planned": _fs("executing", "carded", "reported", "dismissed"),
         "executing": _fs("evaluating", "failed"),
         "evaluating": _fs("reported", "failed"),
-        "reported": _fs(),
+        # A reported paper can be tested again (another baseline, or on purpose).
+        "reported": _fs("experiment_planned"),
         "dismissed": _fs(),
         "failed": _fs(),
     },
