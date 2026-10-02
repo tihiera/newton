@@ -11,12 +11,12 @@ function Pair({ a, b, aLabel, bLabel }: { a: unknown; b: unknown; aLabel: string
     <div className="ex-pair">
       <div>
         <div className="metric-value">{num(a)}</div>
-        <div className="metric-sub">{aLabel}</div>
+        <div className="metric-sub" title={aLabel}>{aLabel}</div>
       </div>
       <div className="ex-pair-rule" />
       <div>
         <div className="metric-value">{num(b)}</div>
-        <div className="metric-sub">{bLabel}</div>
+        <div className="metric-sub" title={bLabel}>{bLabel}</div>
       </div>
     </div>
   );
@@ -26,7 +26,14 @@ function short(v: unknown): string {
   if (typeof v === "number") return num(v);
   if (typeof v === "boolean") return v ? "yes" : "no";
   if (v === null || v === undefined) return "—";
-  return typeof v === "string" ? v : JSON.stringify(v);
+  return typeof v === "string" ? v : "";
+}
+
+/** "claimed 2 · measured 2"; a structured measurement (a CFL sweep, say) is left to
+ *  the checks list below, which has agentd's sentence for it. */
+function claimLine(claimed: unknown, measured: unknown): string {
+  const m = short(measured);
+  return m ? `claimed ${short(claimed)} · measured ${m}` : `claimed ${short(claimed)} · see checks`;
 }
 
 export function MetricTiles({ report, verdict }: { report: ValidationReport; verdict?: CandidateVerdict }) {
@@ -72,9 +79,7 @@ export function MetricTiles({ report, verdict }: { report: ValidationReport; ver
               {claimLabel(a.claim)}
             </div>
             <div className={`metric-value ev-${o.tone}`}>{o.word}</div>
-            <div className="metric-sub">
-              claimed {short(a.claimed)} · measured {short(a.measured)}
-            </div>
+            <div className="metric-sub">{claimLine(a.claimed, a.measured)}</div>
           </div>
         );
       })}

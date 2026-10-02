@@ -3,13 +3,13 @@
 // Nothing is ever trusted without the user pressing "Trust & connect".
 
 import { useCallback, useState } from "react";
-import { AgentdError, api, type ConnectResult } from "../../api";
+import { AgentdError, api, type ConnectResult, type HostKeyFingerprint } from "../../api";
 
 export type ConnectPhase =
   | { phase: "idle" }
   | { phase: "connecting" }
-  | { phase: "hostkey"; fingerprints: string[]; message: string }
-  | { phase: "trusting"; fingerprints: string[]; message: string }
+  | { phase: "hostkey"; fingerprints: HostKeyFingerprint[]; message: string }
+  | { phase: "trusting"; fingerprints: HostKeyFingerprint[]; message: string }
   | { phase: "connected"; result: ConnectResult }
   | { phase: "error"; error: Error };
 
@@ -38,7 +38,7 @@ export function useHostConnect(hostId: string, onChange?: () => void) {
     const { fingerprints, message } = state;
     setState({ phase: "trusting", fingerprints, message });
     try {
-      await api.hosts.trust(hostId, fingerprints);
+      await api.hosts.trust(hostId, fingerprints.map((f) => f.fingerprint));
     } catch (err) {
       setState({ phase: "error", error: err instanceof Error ? err : new Error(String(err)) });
       onChange?.();

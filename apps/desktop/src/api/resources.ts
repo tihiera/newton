@@ -2,6 +2,7 @@
 // Thin wrappers: no decisions here, only paths, methods and shapes.
 
 import { agentd, type AgentdClient } from "./client";
+import type { HostKeyFingerprint } from "./errors";
 import type {
   AgentdEvent,
   Approval,
@@ -91,10 +92,12 @@ export function createApi(c: AgentdClient = agentd) {
     hosts: {
       list: (signal?: AbortSignal) => get<Host[]>("/hosts", undefined, signal),
       sshConfig: () => get<SshConfigHost[]>("/ssh/hosts"),
-      create: (body: { name: string; ssh_target: string; gpu_support?: string }) => post<Host>("/hosts", body),
+      create: (body: { name: string; ssh_target: string; ssh_port?: number; gpu_support?: string }) =>
+        post<Host>("/hosts", body),
       connect: (id: string) => post<ConnectResult>(`/hosts/${id}/connect`),
       hostkeys: (id: string) => get<{ keys?: unknown[]; [k: string]: unknown }>(`/hosts/${id}/hostkeys`),
-      trust: (id: string, fingerprints: string[]) => post<Host>(`/hosts/${id}/hostkeys/trust`, { fingerprints }),
+      trust: (id: string, fingerprints: string[]) =>
+        post<HostKeyFingerprint[]>(`/hosts/${id}/hostkeys/trust`, { fingerprints }),
       check: (id: string) => post<Host>(`/hosts/${id}/check`),
       gpuSupport: (id: string) => post<Record<string, unknown>>(`/hosts/${id}/gpu-support`),
       selftest: (id: string) => post<Job>(`/hosts/${id}/selftest`, {}),

@@ -107,7 +107,9 @@ export function HostCard({ host, refresh, autoConnect, onAutoConnectStarted }: {
         </div>
       ))}
 
-      {host.last_error ? <div className="note warn host-error">{host.last_error}</div> : null}
+      {host.last_error && !(conn.state.phase === "error" && conn.state.error.message === host.last_error) ? (
+        <div className="note warn host-error">{host.last_error}</div>
+      ) : null}
 
       <div className="host-meta small muted">
         {version ? <span>Worker {version}</span> : null}

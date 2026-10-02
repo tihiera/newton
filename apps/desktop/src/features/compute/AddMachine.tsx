@@ -6,7 +6,7 @@ import { api, type SshConfigHost } from "../../api";
 import { usePolling } from "../../hooks/usePolling";
 import { useAction } from "../../hooks/useAction";
 import { Icon } from "../../components/Icon";
-import { Chip, Empty, ErrorNote, Spinner } from "../../components/ui";
+import { Chip, Empty, ErrorNote, Field, fieldError, Spinner } from "../../components/ui";
 
 function target(h: SshConfigHost): string {
   const user = h.user ? `${h.user}@` : "";
@@ -27,6 +27,21 @@ export function AddMachine({ onAdded }: { onAdded: (hostId: string) => void }) {
     } finally {
       setAdding(null);
     }
+  });
+
+  const [manualName, setManualName] = useState("");
+  const [manualTarget, setManualTarget] = useState("");
+  const [manualPort, setManualPort] = useState("");
+  const manual = useAction(async () => {
+    const host = await api.hosts.create({
+      name: manualName.trim() || manualTarget.trim(),
+      ssh_target: manualTarget.trim(),
+      ...(manualPort.trim() ? { ssh_port: Number(manualPort) } : {}),
+    });
+    setManualName("");
+    setManualTarget("");
+    setManualPort("");
+    onAdded(host.id);
   });
 
   if (!open) {
@@ -82,6 +97,43 @@ export function AddMachine({ onAdded }: { onAdded: (hostId: string) => void }) {
           ))}
         </div>
       )}
+      <form
+        className="stack manual-add"
+        style={{ marginTop: 16, gap: 10 }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (manualTarget.trim()) void manual.run();
+        }}
+      >
+        <div className="small muted">Or a machine you reach as user@host</div>
+        <div className="row" style={{ flexWrap: "nowrap", alignItems: "flex-start" }}>
+          <Field label="SSH target" error={fieldError(manual.error, "ssh_target")}>
+            <input
+              className={`input mono ${fieldError(manual.error, "ssh_target") ? "invalid" : ""}`}
+              placeholder="ghost@100.85.54.5"
+              value={manualTarget}
+              onChange={(e) => setManualTarget(e.target.value)}
+            />
+          </Field>
+          <Field label="Port" error={fieldError(manual.error, "ssh_port")}>
+            <input
+              className={`input mono ${fieldError(manual.error, "ssh_port") ? "invalid" : ""}`}
+              style={{ width: 84 }}
+              inputMode="numeric"
+              placeholder="22"
+              value={manualPort}
+              onChange={(e) => setManualPort(e.target.value)}
+            />
+          </Field>
+          <Field label="Name" error={fieldError(manual.error, "name")}>
+            <input className="input" placeholder="Spark" value={manualName} onChange={(e) => setManualName(e.target.value)} />
+          </Field>
+        </div>
+        {manual.error && !Object.keys(manual.fields).length ? <ErrorNote error={manual.error} /> : null}
+        <button className="btn" type="submit" disabled={!manualTarget.trim() || manual.busy}>
+          {manual.busy ? <Spinner /> : <Icon name="plus" size={16} />} Add machine
+        </button>
+      </form>
     </div>
   );
 }

@@ -37,7 +37,10 @@ export function ConnectPanel({ state, onTrust, onCancel }: {
           <div className="small" style={{ marginTop: 12 }}>{state.message}</div>
           <ul className="fingerprints">
             {state.fingerprints.map((f) => (
-              <li key={f} className="mono">{f}</li>
+              <li key={f.fingerprint} className="mono">
+                {f.type ? <span className="muted">{f.type} </span> : null}
+                {f.fingerprint}
+              </li>
             ))}
           </ul>
           <div className="row" style={{ marginTop: 14 }}>

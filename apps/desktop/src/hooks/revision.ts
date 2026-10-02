@@ -5,6 +5,10 @@ import type { AgentdEvent } from "../api";
  *  re-reads at once instead of waiting for its next tick. */
 export const RevisionContext = createContext(0);
 
+/** Re-read every polled view now: after a user action, since not every change (a
+ *  profile edit, say) is an event. */
+export const BumpContext = createContext<() => void>(() => {});
+
 export interface EventsState {
   /** The most recent events (newest last), for timelines. */
   recent: AgentdEvent[];

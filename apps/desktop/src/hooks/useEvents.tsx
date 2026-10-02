@@ -1,10 +1,10 @@
 // The global change signal: /events?after=<last id>, every 2 s while visible. Any new
 // event bumps the revision, so every polled view re-reads at once.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type AgentdEvent } from "../api";
 import { nextDelay } from "./usePolling";
-import { EventsContext, RevisionContext, type EventsState } from "./revision";
+import { BumpContext, EventsContext, RevisionContext, type EventsState } from "./revision";
 import { useVisible } from "./useVisibility";
 
 const EVERY = 2000;
@@ -16,6 +16,7 @@ export function EventsProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<EventsState>({ recent: [], lastId: 0 });
   const lastId = useRef<number | null>(null);
   const failures = useRef(0);
+  const bump = useCallback(() => setRevision((r) => r + 1), []);
 
   useEffect(() => {
     if (!visible) return;
@@ -66,8 +67,10 @@ export function EventsProvider({ children }: { children: ReactNode }) {
   }, [visible]);
 
   return (
-    <RevisionContext.Provider value={revision}>
-      <EventsContext.Provider value={state}>{children}</EventsContext.Provider>
-    </RevisionContext.Provider>
+    <BumpContext.Provider value={bump}>
+      <RevisionContext.Provider value={revision}>
+        <EventsContext.Provider value={state}>{children}</EventsContext.Provider>
+      </RevisionContext.Provider>
+    </BumpContext.Provider>
   );
 }

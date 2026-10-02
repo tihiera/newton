@@ -105,7 +105,7 @@
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
 .ex-tile-wide {
-  grid-column: span 1;
+  grid-column: span 2; /* two numbers side by side need the room */
 }
 .ex-tiles .metric-value {
   font-size: 26px;
@@ -238,6 +238,9 @@
 }
 
 /* tables */
+.ex-table-wrap {
+  overflow-x: auto;
+}
 .ex-table {
   width: 100%;
   border-collapse: collapse;
@@ -256,7 +259,7 @@
 }
 .ex-two {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
   gap: 16px;
   align-items: start;
 }

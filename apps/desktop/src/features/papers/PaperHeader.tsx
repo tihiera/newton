@@ -1,8 +1,9 @@
-import type { ResearchItem } from "../../api";
+import { api, type ResearchItem } from "../../api";
 import { useGoals } from "../../app/data";
 import { useNav } from "../../app/navigation";
+import { useAction } from "../../hooks/useAction";
 import { Icon } from "../../components/Icon";
-import { Chip, StateChip } from "../../components/ui";
+import { Chip, ErrorNote, Spinner, StateChip } from "../../components/ui";
 import { paperSubline, paperTitle } from "./format";
 
 /** Mockup 02's header: back link, big title, sub line, state and claim chips. */
@@ -12,6 +13,8 @@ export function PaperHeader({ item }: { item: ResearchItem }) {
   const goal = nav.goalId ? goals.data?.find((g) => g.id === nav.goalId) : undefined;
   const method = item.data.card?.method;
   const url = item.data.paper?.url || `https://arxiv.org/abs/${item.external_id}`;
+  // agentd retries a failed paper when it is ingested again (same item, fresh read).
+  const retry = useAction(() => api.research.ingest({ ref: item.external_id, goal_id: item.goal_id }));
 
   return (
     <div className="mesh-header pw-head">
@@ -35,6 +38,12 @@ export function PaperHeader({ item }: { item: ResearchItem }) {
           </Chip>
         ) : null}
         <span className="spacer" />
+        {item.state === "failed" ? (
+          <button className="btn" disabled={retry.busy} onClick={() => void retry.run()}>
+            {retry.busy ? <Spinner /> : <Icon name="refresh" size={16} />}
+            Read again
+          </button>
+        ) : null}
         <a
           className="icon-btn outlined"
           href={url}
@@ -46,6 +55,7 @@ export function PaperHeader({ item }: { item: ResearchItem }) {
           <Icon name="share" size={18} />
         </a>
       </div>
+      {retry.error ? <ErrorNote error={retry.error} /> : null}
     </div>
   );
 }

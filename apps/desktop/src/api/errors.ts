@@ -23,7 +23,21 @@ export interface AgentdErrorInfo {
   /** 422: input name (last element of `loc`) -> message. */
   fields?: Record<string, string>;
   /** 409 when a host key isn't trusted yet: the keys to show the user. */
-  fingerprints?: string[];
+  fingerprints?: HostKeyFingerprint[];
+}
+
+/** One host key as agentd reports it: `{type: "ssh-ed25519", fingerprint: "SHA256:…"}`. */
+export interface HostKeyFingerprint {
+  type: string;
+  fingerprint: string;
+}
+
+function hostKeys(v: unknown): HostKeyFingerprint[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  return v.map((k) => {
+    const o = k && typeof k === "object" ? (k as Record<string, unknown>) : null;
+    return o ? { type: String(o.type ?? ""), fingerprint: String(o.fingerprint ?? "") } : { type: "", fingerprint: String(k) };
+  });
 }
 
 export class AgentdError extends Error {
@@ -32,7 +46,7 @@ export class AgentdError extends Error {
   readonly code?: string;
   readonly path?: string;
   readonly fields: Record<string, string>;
-  readonly fingerprints?: string[];
+  readonly fingerprints?: HostKeyFingerprint[];
 
   constructor(kind: AgentdErrorKind, message: string, info: AgentdErrorInfo | number = {}) {
     super(message);
@@ -87,7 +101,7 @@ export function parseErrorBody(status: number, body: unknown, fallback: string):
         status,
         message: err,
         code: typeof b.code === "string" ? b.code : undefined,
-        fingerprints: Array.isArray(b.fingerprints) ? b.fingerprints.map(String) : undefined,
+        fingerprints: hostKeys(b.fingerprints),
       };
     }
   }

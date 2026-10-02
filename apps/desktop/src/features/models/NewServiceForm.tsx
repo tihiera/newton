@@ -88,7 +88,7 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
         ) : (
           <>
             <Note icon="check">
-              <b>{service.name}</b> was created and is starting. It shows in the list above.
+              <b>{service.name}</b> was created and is starting. It shows in the services list.
             </Note>
             <div className="row">
               <button className="btn" onClick={() => { setCreated(null); setForm((f) => ({ ...EMPTY, host_id: f.host_id })); }}>

@@ -86,7 +86,11 @@ pub fn data_dir(env: &Env) -> Result<PathBuf, ConnectionError> {
         return expand_user(&value, env);
     }
     if env.macos {
-        return Ok(env.home()?.join("Library").join("Application Support").join("Newton"));
+        return Ok(env
+            .home()?
+            .join("Library")
+            .join("Application Support")
+            .join("Newton"));
     }
     let base = match env.get("XDG_DATA_HOME") {
         Some(xdg) => PathBuf::from(xdg),
@@ -98,9 +102,17 @@ pub fn data_dir(env: &Env) -> Result<PathBuf, ConnectionError> {
 pub fn port(env: &Env) -> Result<u16, ConnectionError> {
     match env.get("NEWTON_PORT") {
         None => Ok(DEFAULT_PORT),
-        Some(raw) => raw.trim().parse::<u16>().ok().filter(|p| *p != 0).ok_or_else(|| {
-            ConnectionError::new("config", format!("NEWTON_PORT is not a valid port: {raw:?}"))
-        }),
+        Some(raw) => raw
+            .trim()
+            .parse::<u16>()
+            .ok()
+            .filter(|p| *p != 0)
+            .ok_or_else(|| {
+                ConnectionError::new(
+                    "config",
+                    format!("NEWTON_PORT is not a valid port: {raw:?}"),
+                )
+            }),
     }
 }
 
@@ -119,7 +131,10 @@ pub fn read_token(path: &Path) -> Result<String, ConnectionError> {
         }
         Err(e) if e.kind() == ErrorKind::NotFound => Err(ConnectionError::new(
             "token_missing",
-            format!("agentd not started yet: no token file at {}", path.display()),
+            format!(
+                "agentd not started yet: no token file at {}",
+                path.display()
+            ),
         )),
         // The io::Error never contains the file's contents.
         Err(e) => Err(ConnectionError::new(
@@ -171,40 +186,63 @@ mod tests {
     }
 
     fn with_env<T>(vars: &[(&str, &str)], macos: bool, f: impl FnOnce(&Env) -> T) -> T {
-        let map: HashMap<String, String> =
-            vars.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let map: HashMap<String, String> = vars
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
         let var = move |name: &str| map.get(name).cloned();
-        f(&Env { var: &var, home: Some(PathBuf::from("/Users/alice")), macos })
+        f(&Env {
+            var: &var,
+            home: Some(PathBuf::from("/Users/alice")),
+            macos,
+        })
     }
 
     #[test]
     fn default_data_dir_on_macos() {
         let dir = with_env(&[], true, |env| data_dir(env).unwrap());
-        assert_eq!(dir, PathBuf::from("/Users/alice/Library/Application Support/Newton"));
+        assert_eq!(
+            dir,
+            PathBuf::from("/Users/alice/Library/Application Support/Newton")
+        );
     }
 
     #[test]
     fn default_data_dir_elsewhere() {
         let dir = with_env(&[], false, |env| data_dir(env).unwrap());
         assert_eq!(dir, PathBuf::from("/Users/alice/.local/share/newton"));
-        let dir = with_env(&[("XDG_DATA_HOME", "/x")], false, |env| data_dir(env).unwrap());
+        let dir = with_env(&[("XDG_DATA_HOME", "/x")], false, |env| {
+            data_dir(env).unwrap()
+        });
         assert_eq!(dir, PathBuf::from("/x/newton"));
     }
 
     #[test]
     fn data_dir_env_override_expands_tilde_and_ignores_empty() {
-        let dir = with_env(&[("NEWTON_DATA_DIR", "~/nd")], true, |env| data_dir(env).unwrap());
+        let dir = with_env(&[("NEWTON_DATA_DIR", "~/nd")], true, |env| {
+            data_dir(env).unwrap()
+        });
         assert_eq!(dir, PathBuf::from("/Users/alice/nd"));
-        let dir = with_env(&[("NEWTON_DATA_DIR", "/abs/d")], true, |env| data_dir(env).unwrap());
+        let dir = with_env(&[("NEWTON_DATA_DIR", "/abs/d")], true, |env| {
+            data_dir(env).unwrap()
+        });
         assert_eq!(dir, PathBuf::from("/abs/d"));
-        let dir = with_env(&[("NEWTON_DATA_DIR", "")], true, |env| data_dir(env).unwrap());
-        assert_eq!(dir, PathBuf::from("/Users/alice/Library/Application Support/Newton"));
+        let dir = with_env(&[("NEWTON_DATA_DIR", "")], true, |env| {
+            data_dir(env).unwrap()
+        });
+        assert_eq!(
+            dir,
+            PathBuf::from("/Users/alice/Library/Application Support/Newton")
+        );
     }
 
     #[test]
     fn port_default_override_and_invalid() {
         assert_eq!(with_env(&[], true, |env| port(env).unwrap()), 8765);
-        assert_eq!(with_env(&[("NEWTON_PORT", "8799")], true, |env| port(env).unwrap()), 8799);
+        assert_eq!(
+            with_env(&[("NEWTON_PORT", "8799")], true, |env| port(env).unwrap()),
+            8799
+        );
         for bad in ["abc", "0", "70000", "-1"] {
             let err = with_env(&[("NEWTON_PORT", bad)], true, |env| port(env).unwrap_err());
             assert_eq!(err.code, "config", "{bad}");
@@ -216,9 +254,11 @@ mod tests {
         let dir = temp_dir();
         std::fs::write(dir.join(TOKEN_FILE), "s3cret-token\n").unwrap();
         let d = dir.display().to_string();
-        let conn = with_env(&[("NEWTON_DATA_DIR", &d), ("NEWTON_PORT", "8799")], true, |env| {
-            resolve(env).unwrap()
-        });
+        let conn = with_env(
+            &[("NEWTON_DATA_DIR", &d), ("NEWTON_PORT", "8799")],
+            true,
+            |env| resolve(env).unwrap(),
+        );
         assert_eq!(conn.base_url, "http://127.0.0.1:8799");
         assert_eq!(conn.token, "s3cret-token");
         assert_eq!(conn.data_dir, d);
@@ -231,9 +271,11 @@ mod tests {
     fn env_token_wins_like_config_py() {
         let dir = temp_dir();
         let d = dir.display().to_string();
-        let conn = with_env(&[("NEWTON_DATA_DIR", &d), ("NEWTON_API_TOKEN", "from-env")], true, |env| {
-            resolve(env).unwrap()
-        });
+        let conn = with_env(
+            &[("NEWTON_DATA_DIR", &d), ("NEWTON_API_TOKEN", "from-env")],
+            true,
+            |env| resolve(env).unwrap(),
+        );
         assert_eq!(conn.token, "from-env");
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -242,13 +284,19 @@ mod tests {
     fn missing_or_empty_token_file_is_token_missing() {
         let dir = temp_dir();
         let d = dir.display().to_string();
-        let err = with_env(&[("NEWTON_DATA_DIR", &d)], true, |env| resolve(env).unwrap_err());
+        let err = with_env(&[("NEWTON_DATA_DIR", &d)], true, |env| {
+            resolve(env).unwrap_err()
+        });
         assert_eq!(err.code, "token_missing");
-        assert!(err.message.starts_with("agentd not started yet: no token file at "));
+        assert!(err
+            .message
+            .starts_with("agentd not started yet: no token file at "));
         assert!(err.message.contains(&d));
 
         std::fs::write(dir.join(TOKEN_FILE), "  \n").unwrap();
-        let err = with_env(&[("NEWTON_DATA_DIR", &d)], true, |env| resolve(env).unwrap_err());
+        let err = with_env(&[("NEWTON_DATA_DIR", &d)], true, |env| {
+            resolve(env).unwrap_err()
+        });
         assert_eq!(err.code, "token_missing");
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -264,8 +312,14 @@ mod tests {
         let addr = conn.base_url.trim_start_matches("http://").to_string();
         let get = |path: &str, auth: Option<&str>| -> String {
             let mut s = std::net::TcpStream::connect(&addr).expect("connect to agentd");
-            let auth = auth.map(|t| format!("Authorization: Bearer {t}\r\n")).unwrap_or_default();
-            write!(s, "GET {path} HTTP/1.1\r\nHost: {addr}\r\n{auth}Connection: close\r\n\r\n").unwrap();
+            let auth = auth
+                .map(|t| format!("Authorization: Bearer {t}\r\n"))
+                .unwrap_or_default();
+            write!(
+                s,
+                "GET {path} HTTP/1.1\r\nHost: {addr}\r\n{auth}Connection: close\r\n\r\n"
+            )
+            .unwrap();
             let mut out = String::new();
             s.read_to_string(&mut out).unwrap();
             out

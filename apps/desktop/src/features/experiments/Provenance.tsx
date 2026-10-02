@@ -26,30 +26,32 @@ export function Provenance({ report }: { report: ValidationReport }) {
         <div className="h-card" style={{ marginBottom: 10 }}>
           Variants
         </div>
-        <table className="ex-table">
-          <thead>
-            <tr>
-              <th>Variant</th>
-              <th>Backend</th>
-              <th>Device</th>
-              <th>Job</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.variants.map((v) => (
-              <tr key={v.job_id || v.label}>
-                <td>
-                  {v.label} <span className="muted small">{v.role}</span>
-                </td>
-                <td>{v.backend ?? "—"}</td>
-                <td>{v.device ?? "—"}</td>
-                <td>
-                  <StateChip kind="job" state={v.job_state} />
-                </td>
+        <div className="ex-table-wrap">
+          <table className="ex-table">
+            <thead>
+              <tr>
+                <th>Variant</th>
+                <th>Backend</th>
+                <th>Device</th>
+                <th>Job</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {report.variants.map((v) => (
+                <tr key={v.job_id || v.label}>
+                  <td>
+                    {v.label} <span className="muted small">{v.role}</span>
+                  </td>
+                  <td>{v.backend ?? "—"}</td>
+                  <td>{v.device ?? "—"}</td>
+                  <td>
+                    <StateChip kind="job" state={v.job_state} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
       <div className="card">
         <div className="h-card" style={{ marginBottom: 10 }}>

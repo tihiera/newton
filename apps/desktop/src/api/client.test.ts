@@ -143,9 +143,9 @@ describe("agentd client", () => {
   });
 
   it("keeps host-key fingerprints from a 409 and reads router-style errors", async () => {
-    const fp = vi.fn<FetchFn>(async () => json({ error: "unknown host key", fingerprints: ["SHA256:abc"] }, 409));
+    const fp = vi.fn<FetchFn>(async () => json({ error: "unknown host key", fingerprints: [{ type: "ssh-ed25519", fingerprint: "SHA256:abc" }] }, 409));
     const err = await caught(createAgentdClient({ invoke: invokeOk(), fetch: fp }).request("/hosts/h/connect"));
-    expect(err.fingerprints).toEqual(["SHA256:abc"]);
+    expect(err.fingerprints).toEqual([{ type: "ssh-ed25519", fingerprint: "SHA256:abc" }]);
     const router = vi.fn<FetchFn>(async () =>
       json({ error: { message: "no model service runs 'x'", code: "model_not_found" } }, 404));
     const e2 = await caught(createAgentdClient({ invoke: invokeOk(), fetch: router }).request("/v1/x"));
