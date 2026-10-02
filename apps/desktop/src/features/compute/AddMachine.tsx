@@ -38,7 +38,9 @@ export function AddMachine({ onAdded }: { onAdded: (hostId: string) => void }) {
       ssh_target: manualTarget.trim(),
       // Digits go as a number; anything else goes as typed so agentd's 422 names it
       // (Number("22a") would be NaN, which JSON sends as null: the default port).
-      ...(manualPort.trim() ? { ssh_port: /^\d+$/.test(manualPort.trim()) ? Number(manualPort) : manualPort.trim() } : {}),
+      ...(manualPort.trim()
+        ? { ssh_port: /^\d+$/.test(manualPort.trim()) ? Number(manualPort) : manualPort.trim() }
+        : {}),
     });
     setManualName("");
     setManualTarget("");
@@ -72,10 +74,13 @@ export function AddMachine({ onAdded }: { onAdded: (hostId: string) => void }) {
       {list.error ? <ErrorNote error={list.error} /> : null}
       {add.error ? <ErrorNote error={add.error} /> : null}
       {list.loading && !list.data ? (
-        <div className="compute-progress small muted"><Spinner /> Reading ~/.ssh/config…</div>
+        <div className="compute-progress small muted">
+          <Spinner /> Reading ~/.ssh/config…
+        </div>
       ) : rows.length === 0 && list.data ? (
         <Empty title="No hosts in your SSH config" icon="server">
-          Add a <span className="mono">Host</span> entry to <span className="mono">~/.ssh/config</span>, then open this again.
+          Add a <span className="mono">Host</span> entry to <span className="mono">~/.ssh/config</span>, then open this
+          again.
         </Empty>
       ) : (
         <div className="ssh-list">
@@ -110,9 +115,12 @@ export function AddMachine({ onAdded }: { onAdded: (hostId: string) => void }) {
         <div className="small muted">Or a machine you reach as user@host</div>
         <div className="row" style={{ flexWrap: "nowrap", alignItems: "flex-start" }}>
           {/* "user@host": agentd checks the user part as ssh_user. */}
-          <Field label="SSH target" error={fieldError(manual.error, "ssh_target") ?? fieldError(manual.error, "ssh_user")}>
+          <Field
+            label="SSH target"
+            error={fieldError(manual.error, "ssh_target") ?? fieldError(manual.error, "ssh_user")}
+          >
             <input
-              className={`input mono ${fieldError(manual.error, "ssh_target") ?? fieldError(manual.error, "ssh_user") ? "invalid" : ""}`}
+              className={`input mono ${(fieldError(manual.error, "ssh_target") ?? fieldError(manual.error, "ssh_user")) ? "invalid" : ""}`}
               placeholder="ghost@100.85.54.5"
               value={manualTarget}
               onChange={(e) => setManualTarget(e.target.value)}
@@ -129,10 +137,17 @@ export function AddMachine({ onAdded }: { onAdded: (hostId: string) => void }) {
             />
           </Field>
           <Field label="Name" error={fieldError(manual.error, "name")}>
-            <input className="input" placeholder="Spark" value={manualName} onChange={(e) => setManualName(e.target.value)} />
+            <input
+              className="input"
+              placeholder="Spark"
+              value={manualName}
+              onChange={(e) => setManualName(e.target.value)}
+            />
           </Field>
         </div>
-        {formError(manual.error, ["ssh_target", "ssh_user", "ssh_port", "name"]) ? <ErrorNote error={manual.error} /> : null}
+        {formError(manual.error, ["ssh_target", "ssh_user", "ssh_port", "name"]) ? (
+          <ErrorNote error={manual.error} />
+        ) : null}
         <button className="btn" type="submit" disabled={!manualTarget.trim() || manual.busy}>
           {manual.busy ? <Spinner /> : <Icon name="plus" size={16} />} Add machine
         </button>

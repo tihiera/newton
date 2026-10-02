@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { Host } from "../../api";
-import { canInstallGpu, capabilityChips, deviceName, gpuTaskLine, memoryLine, needsConnect, statusChip } from "./hostView";
+import {
+  canInstallGpu,
+  capabilityChips,
+  deviceName,
+  gpuTaskLine,
+  memoryLine,
+  needsConnect,
+  statusChip,
+} from "./hostView";
 
 const GB = 1024 ** 3;
 
@@ -15,7 +23,11 @@ function host(over: Partial<Host> = {}): Host {
     last_checked_at: null,
     gpu_support: "auto",
     hardware: null,
-    capabilities: { cpu: { ok: true }, cuda: { ok: false, reason: "host not checked yet" }, metal: { ok: false, reason: "host not checked yet" } },
+    capabilities: {
+      cpu: { ok: true },
+      cuda: { ok: false, reason: "host not checked yet" },
+      metal: { ok: false, reason: "host not checked yet" },
+    },
     gpu_task: null,
     ...over,
   };
@@ -24,7 +36,11 @@ function host(over: Partial<Host> = {}): Host {
 describe("hostView", () => {
   it("reads the GB10 as the mockup shows it", () => {
     const h = host({
-      hardware: { memory: { total: 121 * GB }, gpus: [{ name: "NVIDIA GB10", unified_memory: true }], worker: { version: "0.4.0" } },
+      hardware: {
+        memory: { total: 121 * GB },
+        gpus: [{ name: "NVIDIA GB10", unified_memory: true }],
+        worker: { version: "0.4.0" },
+      },
       capabilities: {
         cpu: { ok: true, device: "aarch64" },
         cuda: { ok: true, device: "NVIDIA GB10", cupy: "14.2.0" },
@@ -42,7 +58,11 @@ describe("hostView", () => {
     const reason = "NVIDIA GB10 found, but CuPy isn't installed on the host (install GPU support)";
     const h = host({
       hardware: { memory: { total: 64 * GB }, gpus: [{ name: "NVIDIA GB10" }] },
-      capabilities: { cpu: { ok: true }, cuda: { ok: false, device: "NVIDIA GB10", reason }, metal: { ok: false, reason: "x" } },
+      capabilities: {
+        cpu: { ok: true },
+        cuda: { ok: false, device: "NVIDIA GB10", reason },
+        metal: { ok: false, reason: "x" },
+      },
     });
     expect(memoryLine(h)).toBe("64 GB memory");
     expect(capabilityChips(h)).toEqual([
@@ -64,7 +84,10 @@ describe("hostView", () => {
 
   it("gpu task lines", () => {
     expect(gpuTaskLine(host({ gpu_task: { state: "running" } }))?.text).toBe("Setting up GPU support…");
-    expect(gpuTaskLine(host({ gpu_task: { state: "failed", error: "pip failed" } }))).toEqual({ text: "pip failed", tone: "error" });
+    expect(gpuTaskLine(host({ gpu_task: { state: "failed", error: "pip failed" } }))).toEqual({
+      text: "pip failed",
+      tone: "error",
+    });
     expect(gpuTaskLine(host({ gpu_task: { state: "done", ok: true } }))).toBeNull();
   });
 });

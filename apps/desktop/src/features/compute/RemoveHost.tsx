@@ -38,7 +38,9 @@ export function RemoveHost({ host, onRemoved, onCancel }: { host: Host; onRemove
             Remove
           </button>
         )}
-        <button className="btn ghost" onClick={onCancel} disabled={remove.busy}>Cancel</button>
+        <button className="btn ghost" onClick={onCancel} disabled={remove.busy}>
+          Cancel
+        </button>
       </div>
     </div>
   );

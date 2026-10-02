@@ -58,7 +58,11 @@ export function IngestDialog({ goalId, onClose }: { goalId?: string | null; onCl
             />
           </Field>
 
-          <Field label="Research" error={fieldError(err, "goal_id")} hint="Optional. The paper shows in that research's inbox.">
+          <Field
+            label="Research"
+            error={fieldError(err, "goal_id")}
+            hint="Optional. The paper shows in that research's inbox."
+          >
             <select className="select" value={goal} onChange={(e) => setGoal(e.target.value)}>
               <option value="">No research (library only)</option>
               {selectable.map((g) => (
@@ -72,7 +76,9 @@ export function IngestDialog({ goalId, onClose }: { goalId?: string | null; onCl
           <Field
             label="Model"
             error={fieldError(err, "model")}
-            hint={defaultModel ? `Optional. Default: ${defaultModel}` : "Optional. No default model is set in Settings."}
+            hint={
+              defaultModel ? `Optional. Default: ${defaultModel}` : "Optional. No default model is set in Settings."
+            }
           >
             <input
               className={`input ${fieldError(err, "model") ? "invalid" : ""}`}

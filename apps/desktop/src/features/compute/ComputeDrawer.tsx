@@ -37,7 +37,9 @@ export function ComputeDrawer({ onClose }: { onClose: () => void }) {
         <h3 className="h-section compute-heading">Compute hosts</h3>
         {hosts.error && !hosts.data ? <ErrorNote error={hosts.error} /> : null}
         {!hosts.data && hosts.loading ? (
-          <div className="compute-progress small muted"><Spinner /> Loading machines…</div>
+          <div className="compute-progress small muted">
+            <Spinner /> Loading machines…
+          </div>
         ) : null}
         <div className="stack" style={{ gap: 14 }}>
           {(hosts.data ?? []).map((h) => (

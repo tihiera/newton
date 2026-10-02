@@ -54,7 +54,9 @@ export function ModelsDrawer({ onClose }: { onClose: () => void }) {
         ) : null}
         {services.error && !services.data ? <ErrorNote error={services.error} /> : null}
         {!services.data && services.loading ? (
-          <div className="row small muted"><Spinner /> Loading services…</div>
+          <div className="row small muted">
+            <Spinner /> Loading services…
+          </div>
         ) : null}
         {services.data && list.length === 0 && !adding ? (
           <Empty title="No model services" icon="model">
@@ -63,7 +65,13 @@ export function ModelsDrawer({ onClose }: { onClose: () => void }) {
         ) : null}
         <div className="stack" style={{ gap: 14 }}>
           {list.map((s) => (
-            <ServiceCard key={s.id} service={s} hosts={hosts.data} routes={router.data?.models} refresh={services.refresh} />
+            <ServiceCard
+              key={s.id}
+              service={s}
+              hosts={hosts.data}
+              routes={router.data?.models}
+              refresh={services.refresh}
+            />
           ))}
         </div>
 

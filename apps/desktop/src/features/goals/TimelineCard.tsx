@@ -13,7 +13,15 @@ import { pollLine, variantsLine, type TimelineEntry } from "./timeline";
 
 type Tone = "yellow" | "blush" | "lavender" | "powder" | "mint" | "gray";
 
-function Shell({ tone, icon, title, sub, ts, side, children }: {
+function Shell({
+  tone,
+  icon,
+  title,
+  sub,
+  ts,
+  side,
+  children,
+}: {
   tone: Tone;
   icon: string;
   title: ReactNode;
@@ -91,7 +99,15 @@ const RESULT_TITLES: Record<string, string> = {
   cancelled: "Experiment cancelled",
 };
 
-function ResultCard({ ts, experiment, finding }: { ts: number; experiment: Experiment | null; finding: Finding | null }) {
+function ResultCard({
+  ts,
+  experiment,
+  finding,
+}: {
+  ts: number;
+  experiment: Experiment | null;
+  finding: Finding | null;
+}) {
   const nav = useNav();
   const evidence = finding?.evidence ?? experiment?.evidence ?? null;
   const summary = finding?.summary ?? experiment?.evaluation?.summary ?? experiment?.error ?? null;
@@ -101,8 +117,8 @@ function ResultCard({ ts, experiment, finding }: { ts: number; experiment: Exper
     <Shell
       tone={reported ? "mint" : "gray"}
       icon={reported ? "bars" : "alert"}
-      title={experiment ? RESULT_TITLES[experiment.state] ?? "Experiment finished" : "Finding recorded"}
-      sub={experiment ? variantsLine(experiment) : finding?.scheme_name ?? finding?.experiment_id}
+      title={experiment ? (RESULT_TITLES[experiment.state] ?? "Experiment finished") : "Finding recorded"}
+      sub={experiment ? variantsLine(experiment) : (finding?.scheme_name ?? finding?.experiment_id)}
       ts={ts}
       side={
         paperId ? (
@@ -128,7 +144,9 @@ export function TimelineCard({ entry, papers }: { entry: TimelineEntry; papers: 
 
   switch (entry.kind) {
     case "created":
-      return <Shell tone="yellow" icon="sparkle" title="Research started" sub={entry.title ?? undefined} ts={entry.ts} />;
+      return (
+        <Shell tone="yellow" icon="sparkle" title="Research started" sub={entry.title ?? undefined} ts={entry.ts} />
+      );
 
     case "poll": {
       const s = entry.summary;

@@ -236,13 +236,7 @@ export interface LibraryScheme {
 export type Evidence = "green" | "yellow" | "red" | "unknown";
 
 export type ExperimentState =
-  | "awaiting_approval"
-  | "executing"
-  | "evaluating"
-  | "reported"
-  | "failed"
-  | "rejected"
-  | "cancelled";
+  "awaiting_approval" | "executing" | "evaluating" | "reported" | "failed" | "rejected" | "cancelled";
 
 export interface VariantSpec {
   role: "baseline" | "candidate";
@@ -523,13 +517,7 @@ export interface NotionPage {
   icon: string | null;
 }
 
-export type PublicationState =
-  | "awaiting_approval"
-  | "approved"
-  | "publishing"
-  | "published"
-  | "rejected"
-  | "failed";
+export type PublicationState = "awaiting_approval" | "approved" | "publishing" | "published" | "rejected" | "failed";
 
 export interface Publication {
   id: string;

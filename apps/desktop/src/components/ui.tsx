@@ -5,7 +5,12 @@ import { AgentdError, type Evidence } from "../api";
 import { Icon } from "./Icon";
 import { EVIDENCE, stateLabel, TABLES, type Tone } from "./labels";
 
-export function Chip({ tone = "gray", children, large, className = "" }: {
+export function Chip({
+  tone = "gray",
+  children,
+  large,
+  className = "",
+}: {
   tone?: Tone | "outline";
   children: ReactNode;
   large?: boolean;
@@ -27,7 +32,9 @@ export function EvidenceBadge({ evidence, large }: { evidence: Evidence | null |
   const e = EVIDENCE[evidence ?? "unknown"] ?? EVIDENCE.unknown;
   return (
     <Chip tone={e.tone} large={large}>
-      <span className={`dot ${evidence === "green" ? "ok" : evidence === "yellow" ? "warn" : evidence === "red" ? "bad" : ""}`} />
+      <span
+        className={`dot ${evidence === "green" ? "ok" : evidence === "yellow" ? "warn" : evidence === "red" ? "bad" : ""}`}
+      />
       {e.label}
     </Chip>
   );
@@ -59,7 +66,15 @@ export function ErrorNote({ error, children }: { error?: unknown; children?: Rea
   );
 }
 
-export function Note({ children, tone, icon = "info" }: { children: ReactNode; tone?: "warn" | "error"; icon?: string }) {
+export function Note({
+  children,
+  tone,
+  icon = "info",
+}: {
+  children: ReactNode;
+  tone?: "warn" | "error";
+  icon?: string;
+}) {
   return (
     <div className={`note ${tone ?? ""}`}>
       <Icon name={icon} size={18} />
@@ -72,7 +87,12 @@ export function Spinner({ size = 16 }: { size?: number }) {
   return <Icon name="refresh" size={size} className="spin" />;
 }
 
-export function Field({ label, error, children, hint }: {
+export function Field({
+  label,
+  error,
+  children,
+  hint,
+}: {
   label: string;
   error?: string;
   children: ReactNode;
@@ -100,7 +120,12 @@ export function formError(error: Error | undefined, shown: string[]): Error | un
   return keys.length === 0 || keys.some((k) => !shown.includes(k)) ? error : undefined;
 }
 
-export function Switch({ on, onChange, disabled, label }: {
+export function Switch({
+  on,
+  onChange,
+  disabled,
+  label,
+}: {
   on: boolean;
   onChange: (next: boolean) => void;
   disabled?: boolean;
@@ -127,7 +152,12 @@ function useEscape(onClose: () => void) {
   }, [onClose]);
 }
 
-export function Modal({ onClose, children, wide, label }: {
+export function Modal({
+  onClose,
+  children,
+  wide,
+  label,
+}: {
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
@@ -147,7 +177,12 @@ export function Modal({ onClose, children, wide, label }: {
   );
 }
 
-export function Drawer({ title, onClose, children, footer }: {
+export function Drawer({
+  title,
+  onClose,
+  children,
+  footer,
+}: {
   title: ReactNode;
   onClose: () => void;
   children: ReactNode;
@@ -157,7 +192,12 @@ export function Drawer({ title, onClose, children, footer }: {
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <aside className="drawer" role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Panel"}>
+      <aside
+        className="drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === "string" ? title : "Panel"}
+      >
         <div className="drawer-head mesh-header">
           <h2 className="h-display" style={{ fontSize: 30, flex: 1 }}>
             {title}
@@ -173,7 +213,11 @@ export function Drawer({ title, onClose, children, footer }: {
   );
 }
 
-export function Tabs<T extends string>({ tabs, value, onChange }: {
+export function Tabs<T extends string>({
+  tabs,
+  value,
+  onChange,
+}: {
   tabs: Array<{ id: T; label: string }>;
   value: T;
   onChange: (id: T) => void;
@@ -201,9 +245,17 @@ export function Stepper({ steps, current, failed }: { steps: string[]; current: 
       {steps.map((label, i) => (
         <div key={label} style={{ display: "contents" }}>
           {i > 0 ? <div className="step-line" /> : null}
-          <div className={`step ${i < current ? "done" : i === current ? (failed ? "failed current" : "current") : ""}`}>
+          <div
+            className={`step ${i < current ? "done" : i === current ? (failed ? "failed current" : "current") : ""}`}
+          >
             <div className="bubble">
-              {i < current ? <Icon name="check" size={17} /> : i === current && failed ? <Icon name="x" size={17} /> : i === current ? <span className="dot" style={{ background: "var(--ink)" }} /> : null}
+              {i < current ? (
+                <Icon name="check" size={17} />
+              ) : i === current && failed ? (
+                <Icon name="x" size={17} />
+              ) : i === current ? (
+                <span className="dot" style={{ background: "var(--ink)" }} />
+              ) : null}
             </div>
             {label}
           </div>

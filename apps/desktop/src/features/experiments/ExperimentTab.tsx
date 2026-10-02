@@ -42,14 +42,15 @@ export function ExperimentTab({ item, startProposing = false }: { item: Research
   if (!current) return <NoExperiment item={item} />;
 
   const latest = mine[0];
-  const next = !canPropose(item) || proposing ? null : (
-    <div>
-      <button className="btn ex-new" onClick={() => setOpenFor(item.id)}>
-        <Icon name="flask" size={18} />
-        New experiment
-      </button>
-    </div>
-  );
+  const next =
+    !canPropose(item) || proposing ? null : (
+      <div>
+        <button className="btn ex-new" onClick={() => setOpenFor(item.id)}>
+          <Icon name="flask" size={18} />
+          New experiment
+        </button>
+      </div>
+    );
 
   return (
     <div className="stack ex-tab">

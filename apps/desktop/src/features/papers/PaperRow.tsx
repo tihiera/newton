@@ -3,7 +3,11 @@ import { StateChip, Thumb } from "../../components/ui";
 import { paperMeta, paperTitle } from "./format";
 
 /** One paper in the inbox: thumbnail, title (two lines), meta, state. */
-export function PaperRow({ item, selected, onSelect }: {
+export function PaperRow({
+  item,
+  selected,
+  onSelect,
+}: {
   item: ResearchItem;
   selected: boolean;
   onSelect: (id: string) => void;

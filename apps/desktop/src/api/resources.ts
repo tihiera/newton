@@ -37,8 +37,11 @@ export function createApi(c: AgentdClient = agentd) {
 
   return {
     health: c.health,
-    events: (after: number, opts: { limit?: number; entity_type?: string; entity_id?: string } = {}, signal?: AbortSignal) =>
-      get<AgentdEvent[]>("/events", { after, ...opts }, signal),
+    events: (
+      after: number,
+      opts: { limit?: number; entity_type?: string; entity_id?: string } = {},
+      signal?: AbortSignal,
+    ) => get<AgentdEvent[]>("/events", { after, ...opts }, signal),
 
     // -- goals & papers -------------------------------------------------------------
     goals: {
@@ -149,8 +152,7 @@ export function createApi(c: AgentdClient = agentd) {
       importGh: () => post<Connectors>("/connectors/github/import-gh"),
       notionPages: (query?: string, signal?: AbortSignal) =>
         get<NotionPage[]>("/connectors/notion/pages", { query: query || undefined }, signal),
-      disconnect: (target: "github" | "notion") =>
-        c.request<Connectors>(`/connectors/${target}`, { method: "DELETE" }),
+      disconnect: (target: "github" | "notion") => c.request<Connectors>(`/connectors/${target}`, { method: "DELETE" }),
     },
     publishing: {
       publish: (experimentId: string, target: "github" | "notion", destination: Record<string, unknown>) =>

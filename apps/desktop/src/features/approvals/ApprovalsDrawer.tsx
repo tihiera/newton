@@ -28,7 +28,12 @@ function ApprovalCard({ approval, onDecided }: { approval: Approval; onDecided: 
       </div>
       <ApprovalDetails approval={approval} />
       <div style={{ marginTop: 14 }}>
-        <ApprovalActions approval={approval} compact footnote={<ApprovalFootnote approval={approval} />} onDecided={onDecided} />
+        <ApprovalActions
+          approval={approval}
+          compact
+          footnote={<ApprovalFootnote approval={approval} />}
+          onDecided={onDecided}
+        />
       </div>
     </div>
   );
@@ -54,7 +59,9 @@ export function ApprovalsDrawer({ onClose }: { onClose: () => void }) {
         </Empty>
       ) : null}
       <div className="stack">
-        {list?.map((a) => <ApprovalCard key={a.id} approval={a} onDecided={pending.refresh} />)}
+        {list?.map((a) => (
+          <ApprovalCard key={a.id} approval={a} onDecided={pending.refresh} />
+        ))}
       </div>
     </Drawer>
   );

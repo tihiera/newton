@@ -18,7 +18,7 @@ export function PaperInbox() {
   const [query, setQuery] = useState("");
 
   const goal = nav.goalId ? goals.data?.find((g) => g.id === nav.goalId) : undefined;
-  const title = nav.goalId === null ? "All papers" : goal?.title ?? "Research papers";
+  const title = nav.goalId === null ? "All papers" : (goal?.title ?? "Research papers");
   const items = papers.data;
   const shown = useMemo(() => (items ?? []).filter((it) => matchesQuery(it, query)), [items, query]);
   const addPaper = () => nav.open({ kind: "ingest", goalId: nav.goalId });

@@ -31,7 +31,11 @@ export function NoExperiment({ item }: { item: ResearchItem }) {
           <Note>This paper has no scheme mapped onto Newton's IR yet, so there is nothing to test.</Note>
         ) : null}
         {d.proposal_note ? <Note>{d.proposal_note}</Note> : null}
-        {d.error ? <Note tone="error" icon="alert">{d.error}</Note> : null}
+        {d.error ? (
+          <Note tone="error" icon="alert">
+            {d.error}
+          </Note>
+        ) : null}
       </div>
     </div>
   );

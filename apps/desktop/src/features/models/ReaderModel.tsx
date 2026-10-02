@@ -9,7 +9,13 @@ import { Chip, ErrorNote, fieldError, Spinner, Thumb } from "../../components/ui
 import { DefaultModelPicker } from "./DefaultModelPicker";
 import { readerLine } from "./readerView";
 
-export function ReaderModel({ profile, router, services, hosts, onSaved }: {
+export function ReaderModel({
+  profile,
+  router,
+  services,
+  hosts,
+  onSaved,
+}: {
   profile: Profile | undefined;
   router: RouterStatus | undefined;
   services: Service[] | undefined;
@@ -23,7 +29,7 @@ export function ReaderModel({ profile, router, services, hosts, onSaved }: {
     return true;
   });
   const line = readerLine(profile, router, services);
-  const hostName = line.hostId ? hosts?.find((h) => h.id === line.hostId)?.name ?? line.hostId : null;
+  const hostName = line.hostId ? (hosts?.find((h) => h.id === line.hostId)?.name ?? line.hostId) : null;
 
   return (
     <div className="card reader-card-lg">
@@ -61,7 +67,11 @@ export function ReaderModel({ profile, router, services, hosts, onSaved }: {
       </div>
       {editing ? (
         <div className="stack" style={{ marginTop: 14, gap: 10 }}>
-          <DefaultModelPicker value={model} onChange={setModel} invalid={Boolean(fieldError(save.error, "default_model"))} />
+          <DefaultModelPicker
+            value={model}
+            onChange={setModel}
+            invalid={Boolean(fieldError(save.error, "default_model"))}
+          />
           {save.error ? <ErrorNote error={fieldError(save.error, "default_model") ?? save.error} /> : null}
           <div className="row">
             <button
@@ -77,7 +87,9 @@ export function ReaderModel({ profile, router, services, hosts, onSaved }: {
               {save.busy ? <Spinner /> : null}
               Save
             </button>
-            <button className="btn ghost" onClick={() => setEditing(false)}>Cancel</button>
+            <button className="btn ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </button>
           </div>
         </div>
       ) : null}

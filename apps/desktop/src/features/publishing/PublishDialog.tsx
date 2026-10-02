@@ -29,7 +29,13 @@ const CHOICES: Array<{ id: Choice; icon: string; title: string; sub: string }> =
 
 const NAMES = { github: "GitHub", notion: "Notion" } as const;
 
-export function PublishDialog({ experiment, onClose }: { experiment: Pick<Experiment, "id" | "evidence" | "title">; onClose: () => void }) {
+export function PublishDialog({
+  experiment,
+  onClose,
+}: {
+  experiment: Pick<Experiment, "id" | "evidence" | "title">;
+  onClose: () => void;
+}) {
   const nav = useNav();
   const [choice, setChoice] = useState<Choice>("gist");
   const [repo, setRepo] = useState("");
@@ -105,12 +111,15 @@ export function PublishDialog({ experiment, onClose }: { experiment: Pick<Experi
         <div className="stack pub-fields">
           {choice === "issue" ? (
             <Field label="Repository" hint="owner/name">
-              <input className="input" placeholder="owner/name" value={repo} onChange={(e) => setRepo(e.target.value)} />
+              <input
+                className="input"
+                placeholder="owner/name"
+                value={repo}
+                onChange={(e) => setRepo(e.target.value)}
+              />
             </Field>
           ) : null}
-          {choice === "notion" && connected ? (
-            <ParentPagePicker page={page} onPage={setPage} />
-          ) : null}
+          {choice === "notion" && connected ? <ParentPagePicker page={page} onPage={setPage} /> : null}
           {connectors.error ? <ErrorNote error={connectors.error} /> : null}
           {connectors.data && !connected ? (
             <Note tone="warn" icon="link">
@@ -129,9 +138,7 @@ export function PublishDialog({ experiment, onClose }: { experiment: Pick<Experi
             </Note>
           ) : null}
           {action.error ? <ErrorNote error={action.error} /> : null}
-          {orphan ? (
-            <Note>The publication was created; its approval is waiting in Approvals.</Note>
-          ) : null}
+          {orphan ? <Note>The publication was created; its approval is waiting in Approvals.</Note> : null}
         </div>
       </div>
       <div className="modal-foot pub-foot">
@@ -214,7 +221,9 @@ function ParentPagePicker({ page, onPage }: { page: string; onPage: (id: string)
   return (
     <div className="stack" style={{ gap: 6 }}>
       <div className="field">
-        <span className="field-label" id="pub-parent-label">Parent page</span>
+        <span className="field-label" id="pub-parent-label">
+          Parent page
+        </span>
         <button
           type="button"
           className={`select pub-page-select ${open ? "open" : ""}`}
@@ -278,14 +287,10 @@ function ParentPagePicker({ page, onPage }: { page: string; onPage: (id: string)
               ))}
             </div>
           ) : null}
-          {hint === "no_match" ? (
-            <div className="pub-pages-hint small muted">No page matches that search.</div>
-          ) : null}
+          {hint === "no_match" ? <div className="pub-pages-hint small muted">No page matches that search.</div> : null}
         </div>
       ) : null}
-      {hint === "share" ? (
-        <Note icon="link">Share the page with your Notion integration, then reopen.</Note>
-      ) : null}
+      {hint === "share" ? <Note icon="link">Share the page with your Notion integration, then reopen.</Note> : null}
       {pages.error ? <ErrorNote error={pages.error} /> : null}
       <button type="button" className="pub-switch" onClick={togglePaste}>
         Paste a page id instead

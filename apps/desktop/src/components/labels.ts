@@ -71,7 +71,14 @@ const GOAL: Record<string, [string, Tone]> = {
   archived: ["Archived", "gray"],
 };
 
-export const TABLES = { paper: PAPER, experiment: EXPERIMENT, job: JOB, service: SERVICE, publication: PUBLICATION, goal: GOAL };
+export const TABLES = {
+  paper: PAPER,
+  experiment: EXPERIMENT,
+  job: JOB,
+  service: SERVICE,
+  publication: PUBLICATION,
+  goal: GOAL,
+};
 
 export function stateLabel(kind: keyof typeof TABLES, state: string | null | undefined): [string, Tone] {
   if (!state) return ["—", "gray"];

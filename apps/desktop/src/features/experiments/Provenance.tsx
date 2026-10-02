@@ -72,7 +72,9 @@ export function Provenance({ report }: { report: ValidationReport }) {
                   <span className="muted">Job · {label}</span>
                   <span>
                     <span className="mono">{text(j?.id)}</span>
-                    {j?.attempt !== undefined ? <span className="muted small"> · attempt {text(j.attempt)}</span> : null}
+                    {j?.attempt !== undefined ? (
+                      <span className="muted small"> · attempt {text(j.attempt)}</span>
+                    ) : null}
                     {j?.device_lease ? <div className="mono small muted">lease {text(j.device_lease)}</div> : null}
                   </span>
                 </div>

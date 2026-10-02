@@ -54,8 +54,7 @@ a:hover {
   padding: 34px 12px 12px;
   background:
     radial-gradient(60% 50% at 100% 0%, rgba(248, 201, 221, 0.18), transparent 70%),
-    radial-gradient(50% 40% at 0% 100%, rgba(251, 230, 162, 0.16), transparent 70%),
-    var(--bg);
+    radial-gradient(50% 40% at 0% 100%, rgba(251, 230, 162, 0.16), transparent 70%), var(--bg);
 }
 .panel {
   background: var(--surface);
@@ -215,8 +214,7 @@ a:hover {
   background:
     radial-gradient(60% 60% at 30% 30%, #f3a3c8, transparent 70%),
     radial-gradient(60% 60% at 70% 70%, #a9c4f5, transparent 70%),
-    radial-gradient(60% 60% at 70% 20%, #f9d96b, transparent 70%),
-    #e9e3f6;
+    radial-gradient(60% 60% at 70% 20%, #f9d96b, transparent 70%), #e9e3f6;
   flex: none;
 }
 
@@ -397,7 +395,10 @@ a:hover {
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, box-shadow 0.15s, transform 0.05s;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s,
+    transform 0.05s;
 }
 .btn:hover {
   background: #fff;
@@ -510,7 +511,9 @@ a:hover {
   border-radius: var(--radius-sm);
   padding: 10px 13px;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 .input:focus,
 .select:focus,

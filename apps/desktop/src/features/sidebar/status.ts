@@ -25,7 +25,10 @@ export function computeStatus(hosts: Host[] | undefined): StatusLine {
   if (online) return { label: `${online.name} · Online`, dot: "ok" };
   if (remote.length) {
     const h = remote[0];
-    return { label: `${h.name} · ${h.status.startsWith("error") ? "Needs attention" : "Not connected"}`, dot: h.status.startsWith("error") ? "bad" : "warn" };
+    return {
+      label: `${h.name} · ${h.status.startsWith("error") ? "Needs attention" : "Not connected"}`,
+      dot: h.status.startsWith("error") ? "bad" : "warn",
+    };
   }
   const local = hosts.find((h) => h.kind === "local");
   if (local?.capabilities?.metal?.ok) return { label: "This Mac · Metal", dot: "ok" };
@@ -42,12 +45,16 @@ export function readerStatus(
   const model = profile?.default_model;
   if (!profile) return { label: "Reader…", dot: "hollow" };
   if (!model) return { label: "Reader · not set", dot: "hollow" };
-  const entry = router?.models.find((m) => m.id === model || plain(m.id) === plain(model) || m.newton.services.some((s) => s.id === model));
+  const entry = router?.models.find(
+    (m) => m.id === model || plain(m.id) === plain(model) || m.newton.services.some((s) => s.id === model),
+  );
   const routes = entry?.newton.services ?? [];
   if (routes.some((s) => s.routable)) return { label: `Reader · ${plain(model)}`, dot: "ok" };
   if (routes.some((s) => s.paused)) return { label: `Reader · ${plain(model)} · paused`, dot: "warn" };
   const starting = (services ?? []).some(
-    (s) => (s.spec.model === model || plain(s.spec.model) === plain(model)) && ["approved", "starting", "awaiting_approval"].includes(s.state),
+    (s) =>
+      (s.spec.model === model || plain(s.spec.model) === plain(model)) &&
+      ["approved", "starting", "awaiting_approval"].includes(s.state),
   );
   if (starting || routes.length) return { label: `Reader · ${plain(model)} · starting`, dot: "warn" };
   return { label: `Reader · ${plain(model)} · not served`, dot: "hollow" };

@@ -30,7 +30,13 @@ export function NewResearchDialog({ onClose }: { onClose: () => void }) {
   const fields = err instanceof AgentdError ? err.fields : {};
   // One line per offending item, under the input that holds the list.
   const le = (name: "keywords" | "categories") => listErrors(fields, name, sent[name]).join("\n") || undefined;
-  const shown = ["title", "description", "poll_hours", ...listKeys(fields, "keywords"), ...listKeys(fields, "categories")];
+  const shown = [
+    "title",
+    "description",
+    "poll_hours",
+    ...listKeys(fields, "keywords"),
+    ...listKeys(fields, "categories"),
+  ];
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -78,7 +84,11 @@ export function NewResearchDialog({ onClose }: { onClose: () => void }) {
             />
           </Field>
 
-          <Field label="Description" error={fe("description")} hint="What you want to find out. The model uses it to triage papers.">
+          <Field
+            label="Description"
+            error={fe("description")}
+            hint="What you want to find out. The model uses it to triage papers."
+          >
             <textarea
               className={`textarea ${fe("description") ? "invalid" : ""}`}
               value={description}

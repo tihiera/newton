@@ -112,23 +112,38 @@ describe("export", () => {
     expect(exportFileName({ id: "exp/../x", title: "∆∆" })).toBe("experiment-exp-x.zip");
   });
   it("picks the newest reported experiment", () => {
-    const mine = [{ id: "c", state: "executing" }, { id: "b", state: "reported" }, { id: "a", state: "reported" }] as const;
+    const mine = [
+      { id: "c", state: "executing" },
+      { id: "b", state: "reported" },
+      { id: "a", state: "reported" },
+    ] as const;
     expect(latestReported(mine)?.id).toBe("b");
     expect(latestReported([{ state: "failed" }])).toBeUndefined();
   });
 });
 
 describe("search", () => {
-  const it1 = item({ title: "Flux limiters" }, {
-    paper,
-    card: {
-      relevant: true,
-      summary: "A van Leer limiter study",
-      method: { name: "MUSCL", limiter: "van_leer", second_order_correction: true, time_integration: "rk2", order: 2, max_cfl: 0.8, tvd: true },
-      claims: [],
-      benchmarks: [],
+  const it1 = item(
+    { title: "Flux limiters" },
+    {
+      paper,
+      card: {
+        relevant: true,
+        summary: "A van Leer limiter study",
+        method: {
+          name: "MUSCL",
+          limiter: "van_leer",
+          second_order_correction: true,
+          time_integration: "rk2",
+          order: 2,
+          max_cfl: 0.8,
+          tvd: true,
+        },
+        claims: [],
+        benchmarks: [],
+      },
     },
-  });
+  );
   it("matches title, authors, summary and id, all words", () => {
     expect(matchesQuery(it1, "")).toBe(true);
     expect(matchesQuery(it1, "turing")).toBe(true);
@@ -161,7 +176,13 @@ describe("scheme IR text", () => {
 
 describe("provenance", () => {
   it("lists known keys first and skips nested values", () => {
-    const rows = provenanceRows({ host: "spark", model: "llama3.2:3b", "request-id": "req-1", extra: { a: 1 }, zeta: "z" });
+    const rows = provenanceRows({
+      host: "spark",
+      model: "llama3.2:3b",
+      "request-id": "req-1",
+      extra: { a: 1 },
+      zeta: "z",
+    });
     expect(rows.map((r) => r.key)).toEqual(["model", "host", "request-id", "zeta"]);
     expect(rows[2].label).toBe("Router request");
   });

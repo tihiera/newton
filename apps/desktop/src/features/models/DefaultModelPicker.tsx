@@ -5,7 +5,11 @@ import { useState } from "react";
 import { api } from "../../api";
 import { usePolling } from "../../hooks/usePolling";
 
-export function DefaultModelPicker({ value, onChange, invalid }: {
+export function DefaultModelPicker({
+  value,
+  onChange,
+  invalid,
+}: {
   value: string;
   onChange: (model: string) => void;
   invalid?: boolean;
@@ -42,7 +46,9 @@ export function DefaultModelPicker({ value, onChange, invalid }: {
       <select className={`select ${invalid ? "invalid" : ""}`} value={value} onChange={(e) => onChange(e.target.value)}>
         <option value="">Not set</option>
         {options.map((id) => (
-          <option key={id} value={id}>{id}</option>
+          <option key={id} value={id}>
+            {id}
+          </option>
         ))}
       </select>
       <button type="button" className="btn ghost small-link" onClick={() => setTyped(true)}>

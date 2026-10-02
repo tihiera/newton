@@ -73,8 +73,8 @@ describe("ExternalLink", () => {
       const html = renderToStaticMarkup(createElement(ExternalLink, { href, children: "paper" }));
       expect(html).toBe("<span>paper</span>");
     }
-    expect(renderToStaticMarkup(createElement(ExternalLink, { href: "https://doi.org/10.1137/0721062", children: "doi" }))).toBe(
-      '<a href="https://doi.org/10.1137/0721062" rel="noreferrer noopener">doi</a>',
-    );
+    expect(
+      renderToStaticMarkup(createElement(ExternalLink, { href: "https://doi.org/10.1137/0721062", children: "doi" })),
+    ).toBe('<a href="https://doi.org/10.1137/0721062" rel="noreferrer noopener">doi</a>');
   });
 });

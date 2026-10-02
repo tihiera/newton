@@ -21,7 +21,10 @@ export function PaperHeader({ item }: { item: ResearchItem }) {
   // agentd retries a failed paper when it is ingested again (same item, fresh read).
   const retry = useAction(() => api.research.ingest({ ref: item.external_id, goal_id: item.goal_id }));
   const experiments = useExperiments();
-  const reported = useMemo(() => latestReported(experimentsFor(experiments.data ?? [], item.id)), [experiments.data, item.id]);
+  const reported = useMemo(
+    () => latestReported(experimentsFor(experiments.data ?? [], item.id)),
+    [experiments.data, item.id],
+  );
   // The user picks where the zip goes in the shell's save dialog (null: cancelled).
   const exporter = useAction(async (id: string, name: string) => saveFile(name, await api.experiments.exportZip(id)));
 
@@ -29,7 +32,7 @@ export function PaperHeader({ item }: { item: ResearchItem }) {
     <div className="mesh-header pw-head">
       <button className="pw-back" onClick={() => nav.selectPaper(null)}>
         <Icon name="chevronLeft" size={15} />
-        {nav.goalId ? goal?.title ?? "Research" : "Papers"}
+        {nav.goalId ? (goal?.title ?? "Research") : "Papers"}
       </button>
       <h1 className="pw-title">{paperTitle(item)}</h1>
       <p className="pw-sub">{paperSubline(item)}</p>

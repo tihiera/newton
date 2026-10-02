@@ -13,7 +13,12 @@ const ENDED = new Set(["stopped", "failed", "lost", "rejected", "cancelled"]);
 
 type Panel = "stop" | "drain" | "logs" | null;
 
-export function ServiceCard({ service, hosts, routes, refresh }: {
+export function ServiceCard({
+  service,
+  hosts,
+  routes,
+  refresh,
+}: {
   service: Service;
   hosts: Host[] | undefined;
   routes: RouterModel[] | undefined;
@@ -99,7 +104,10 @@ export function ServiceCard({ service, hosts, routes, refresh }: {
               <Icon name="stop" size={15} /> Stop
             </button>
             {service.state === "ready" ? (
-              <button className={`btn ghost small-btn ${panel === "drain" ? "active" : ""}`} onClick={() => toggle("drain")}>
+              <button
+                className={`btn ghost small-btn ${panel === "drain" ? "active" : ""}`}
+                onClick={() => toggle("drain")}
+              >
                 <Icon name="clock" size={15} /> Drain
               </button>
             ) : null}
@@ -115,19 +123,25 @@ export function ServiceCard({ service, hosts, routes, refresh }: {
 
       {panel === "stop" ? (
         <div className="confirm-box">
-          <div className="small">Stop <b>{service.name}</b> now?</div>
+          <div className="small">
+            Stop <b>{service.name}</b> now?
+          </div>
           <div className="row">
             <button className="btn danger" disabled={stop.busy} onClick={() => stop.run()}>
               {stop.busy ? <Spinner /> : null}
               Stop now
             </button>
-            <button className="btn ghost" onClick={() => setPanel(null)}>Cancel</button>
+            <button className="btn ghost" onClick={() => setPanel(null)}>
+              Cancel
+            </button>
           </div>
         </div>
       ) : null}
       {panel === "drain" ? (
         <div className="confirm-box">
-          <div className="small">Stop taking new requests now, then stop after this many seconds so requests in flight can finish.</div>
+          <div className="small">
+            Stop taking new requests now, then stop after this many seconds so requests in flight can finish.
+          </div>
           <div className="row">
             <input
               className="input"

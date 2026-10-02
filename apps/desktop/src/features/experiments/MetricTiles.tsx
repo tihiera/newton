@@ -11,12 +11,16 @@ function Pair({ a, b, aLabel, bLabel }: { a: unknown; b: unknown; aLabel: string
     <div className="ex-pair">
       <div>
         <div className="metric-value">{num(a)}</div>
-        <div className="metric-sub" title={aLabel}>{aLabel}</div>
+        <div className="metric-sub" title={aLabel}>
+          {aLabel}
+        </div>
       </div>
       <div className="ex-pair-rule" />
       <div>
         <div className="metric-value">{num(b)}</div>
-        <div className="metric-sub" title={bLabel}>{bLabel}</div>
+        <div className="metric-sub" title={bLabel}>
+          {bLabel}
+        </div>
       </div>
     </div>
   );

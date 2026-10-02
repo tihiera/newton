@@ -71,7 +71,11 @@ export function Sidebar() {
             ))}
           </details>
         ) : null}
-        {goals.error && !goals.data ? <div className="small muted" style={{ padding: "6px 12px" }}>{goals.error.message}</div> : null}
+        {goals.error && !goals.data ? (
+          <div className="small muted" style={{ padding: "6px 12px" }}>
+            {goals.error.message}
+          </div>
+        ) : null}
       </div>
 
       <div className="sidebar-foot">

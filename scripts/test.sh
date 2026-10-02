@@ -18,8 +18,8 @@ if command -v dash >/dev/null 2>&1; then dash -n services/worker/bootstrap.sh; f
 # Desktop shell (apps/desktop): only where its dependencies are installed
 # (`pnpm install` there); the Rust tests only once it has been built.
 if [ -d apps/desktop/node_modules ] && command -v pnpm >/dev/null 2>&1; then
-  echo "==> desktop (typecheck, tests)"
-  (cd apps/desktop && pnpm -s typecheck && pnpm -s test)
+  echo "==> desktop (format, lint, typecheck, tests)"
+  (cd apps/desktop && pnpm -s format:check && pnpm -s lint && pnpm -s typecheck && pnpm -s test)
   if [ -d apps/desktop/src-tauri/target ] && command -v cargo >/dev/null 2>&1; then
     (cd apps/desktop/src-tauri && cargo test -q)
   fi

@@ -17,7 +17,7 @@ const ms = (n: number | null) => (n === null ? "—" : n >= 1000 ? `${(n / 1000)
 
 export function RequestLog({ hosts }: { hosts: Host[] | undefined }) {
   const log = usePolling(() => api.router.requests(30), [], { interval: 5000 });
-  const hostName = (id: string | null) => (id ? hosts?.find((h) => h.id === id)?.name ?? id : "—");
+  const hostName = (id: string | null) => (id ? (hosts?.find((h) => h.id === id)?.name ?? id) : "—");
   const rows = log.data ?? [];
 
   if (log.error && !log.data) return <ErrorNote error={log.error} />;
@@ -48,7 +48,10 @@ export function RequestLog({ hosts }: { hosts: Host[] | undefined }) {
               <td>
                 <span className="mono">{r.model_requested ?? "—"}</span>
                 {r.model && r.model !== r.model_requested ? (
-                  <span className="muted"> → <span className="mono">{r.model}</span></span>
+                  <span className="muted">
+                    {" "}
+                    → <span className="mono">{r.model}</span>
+                  </span>
                 ) : null}
                 {r.attempts > 1 ? <span className="small muted"> · {r.attempts} attempts</span> : null}
               </td>
@@ -65,7 +68,9 @@ export function RequestLog({ hosts }: { hosts: Host[] | undefined }) {
         </tbody>
       </table>
       {rows.some((r) => r.error) ? (
-        <div className="small muted" style={{ marginTop: 8 }}>Hover a row to read its error.</div>
+        <div className="small muted" style={{ marginTop: 8 }}>
+          Hover a row to read its error.
+        </div>
       ) : null}
     </div>
   );

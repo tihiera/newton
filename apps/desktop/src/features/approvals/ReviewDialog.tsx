@@ -62,7 +62,11 @@ export function ReviewDialog({ approvalId, onClose }: { approvalId: string; onCl
       {approval ? (
         <div className="modal-foot ap-modal-foot">
           {approval.status === "pending" ? (
-            <ApprovalActions approval={approval} footnote={<ApprovalFootnote approval={approval} />} onDecided={found.refresh} />
+            <ApprovalActions
+              approval={approval}
+              footnote={<ApprovalFootnote approval={approval} />}
+              onDecided={found.refresh}
+            />
           ) : (
             <div className="row" style={{ width: "100%" }}>
               <ApprovalFootnote approval={approval} />

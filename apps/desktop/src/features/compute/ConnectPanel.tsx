@@ -5,7 +5,11 @@ import { Icon } from "../../components/Icon";
 import { ErrorNote, Spinner } from "../../components/ui";
 import type { ConnectPhase } from "./useHostConnect";
 
-export function ConnectPanel({ state, onTrust, onCancel }: {
+export function ConnectPanel({
+  state,
+  onTrust,
+  onCancel,
+}: {
   state: ConnectPhase;
   onTrust: () => void;
   onCancel: () => void;
@@ -29,12 +33,12 @@ export function ConnectPanel({ state, onTrust, onCancel }: {
             </span>
             <div className="stack" style={{ gap: 6 }}>
               <div className="h-card">Is this the machine you expect?</div>
-              <div className="small muted">
-                Newton verifies host keys and never connects to an unknown one.
-              </div>
+              <div className="small muted">Newton verifies host keys and never connects to an unknown one.</div>
             </div>
           </div>
-          <div className="small" style={{ marginTop: 12 }}>{state.message}</div>
+          <div className="small" style={{ marginTop: 12 }}>
+            {state.message}
+          </div>
           <ul className="fingerprints">
             {state.fingerprints.map((f) => (
               <li key={f.fingerprint} className="mono">
@@ -61,7 +65,12 @@ export function ConnectPanel({ state, onTrust, onCancel }: {
           <div>
             Connected. Self-test queued: <span className="mono">{state.result.selftest_job_id}</span>
           </div>
-          <button className="icon-btn" style={{ width: 26, height: 26, marginLeft: "auto" }} onClick={onCancel} aria-label="Dismiss">
+          <button
+            className="icon-btn"
+            style={{ width: 26, height: 26, marginLeft: "auto" }}
+            onClick={onCancel}
+            aria-label="Dismiss"
+          >
             <Icon name="x" size={14} />
           </button>
         </div>

@@ -115,7 +115,9 @@ function ExperimentBody({ exp, refresh, next }: { exp: Experiment; refresh: () =
 
       {reported ? <PublicationsList experimentId={exp.id} /> : null}
 
-      {overlay === "report" ? <ReportModal experimentId={exp.id} title={exp.title} onClose={() => setOverlay(null)} /> : null}
+      {overlay === "report" ? (
+        <ReportModal experimentId={exp.id} title={exp.title} onClose={() => setOverlay(null)} />
+      ) : null}
       {overlay === "publish" ? <PublishDialog experiment={exp} onClose={() => setOverlay(null)} /> : null}
     </div>
   );

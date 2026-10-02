@@ -35,7 +35,11 @@ const BACKENDS = [
 
 /** `onCancel`: the form was opened on purpose (a paper's "New experiment") and can be
  *  closed again. `onProposed`: the experiment exists (before the review opens). */
-export function ProposeCard({ item, onCancel, onProposed }: {
+export function ProposeCard({
+  item,
+  onCancel,
+  onProposed,
+}: {
   item: ResearchItem;
   onCancel?: () => void;
   onProposed?: () => void;
@@ -66,7 +70,9 @@ export function ProposeCard({ item, onCancel, onProposed }: {
 
   // Always the choice the form shows, also for "Propose anyway" after a 409.
   const send = async (retest: boolean) => {
-    const approvalId = await action.run(proposeBody({ baseline, initial_condition: ic, host_id: hostId, backend }, retest));
+    const approvalId = await action.run(
+      proposeBody({ baseline, initial_condition: ic, host_id: hostId, backend }, retest),
+    );
     if (approvalId === undefined) return; // failed: the error is shown
     onProposed?.();
     if (approvalId) nav.open({ kind: "review", approvalId });
@@ -150,7 +156,12 @@ export function ProposeCard({ item, onCancel, onProposed }: {
       ) : (
         <>
           {action.error ? <ErrorNote error={action.error} /> : null}
-          <button className="btn primary large block" style={{ marginTop: 16 }} disabled={action.busy} onClick={() => send(false)}>
+          <button
+            className="btn primary large block"
+            style={{ marginTop: 16 }}
+            disabled={action.busy}
+            onClick={() => send(false)}
+          >
             {action.busy ? <Spinner /> : <Icon name="play" size={18} />}
             Propose experiment
           </button>

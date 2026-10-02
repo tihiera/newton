@@ -56,9 +56,7 @@ export function paperMeta(item: ResearchItem): string {
 /** The header sub line: arXiv id · journal · year · authors. */
 export function paperSubline(item: ResearchItem): string {
   const journal = journalRef(item);
-  return [`arXiv ${item.external_id}`, journal, yearAfter(journal, item), authorList(item)]
-    .filter(Boolean)
-    .join(" · ");
+  return [`arXiv ${item.external_id}`, journal, yearAfter(journal, item), authorList(item)].filter(Boolean).join(" · ");
 }
 
 export interface DoiLink {
@@ -172,7 +170,9 @@ export interface ProvenanceRow {
 export function provenanceRows(extraction: Record<string, unknown> | undefined | null): ProvenanceRow[] {
   if (!extraction) return [];
   const known = Object.keys(PROVENANCE_LABELS).filter((k) => k in extraction);
-  const rest = Object.keys(extraction).filter((k) => !(k in PROVENANCE_LABELS)).sort();
+  const rest = Object.keys(extraction)
+    .filter((k) => !(k in PROVENANCE_LABELS))
+    .sort();
   const rows: ProvenanceRow[] = [];
   for (const key of [...known, ...rest]) {
     const v = extraction[key];

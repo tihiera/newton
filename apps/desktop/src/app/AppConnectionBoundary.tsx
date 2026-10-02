@@ -18,8 +18,8 @@ const TITLES: Record<AgentdErrorKind, string> = {
 const HINTS: Record<AgentdErrorKind, ReactNode> = {
   token_missing: (
     <>
-      Start it from the repository with <code>scripts/dev.sh</code> (or run <code>newton-agentd serve</code>).
-      Newton connects as soon as it is up.
+      Start it from the repository with <code>scripts/dev.sh</code> (or run <code>newton-agentd serve</code>). Newton
+      connects as soon as it is up.
     </>
   ),
   unreachable: (
@@ -29,8 +29,8 @@ const HINTS: Record<AgentdErrorKind, ReactNode> = {
   ),
   unauthorized: (
     <>
-      The app and agentd use different data directories. Use <code>pnpm dev:repo</code> with{" "}
-      <code>scripts/dev.sh</code>, or the same <code>NEWTON_DATA_DIR</code> for both.
+      The app and agentd use different data directories. Use <code>pnpm dev:repo</code> with <code>scripts/dev.sh</code>
+      , or the same <code>NEWTON_DATA_DIR</code> for both.
     </>
   ),
   config: <>The Newton shell couldn't tell where agentd listens. Check NEWTON_PORT and NEWTON_DATA_DIR.</>,

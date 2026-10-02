@@ -39,7 +39,9 @@ export function ServiceDetails({ details }: { details: Record<string, unknown> }
       </DetailRow>
       <DetailRow icon="database" tile="blush" title="Download">
         <div className="ap-strong">
-          {download ? `Downloads the model${dlGb !== undefined ? ` (up to ${num(dlGb)} GB)` : ""}` : "Already on the host: no download"}
+          {download
+            ? `Downloads the model${dlGb !== undefined ? ` (up to ${num(dlGb)} GB)` : ""}`
+            : "Already on the host: no download"}
         </div>
       </DetailRow>
       <DetailRow icon="chip" tile="powder" title="Memory">

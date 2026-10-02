@@ -38,7 +38,10 @@ export function useHostConnect(hostId: string, onChange?: () => void) {
     const { fingerprints, message } = state;
     setState({ phase: "trusting", fingerprints, message });
     try {
-      await api.hosts.trust(hostId, fingerprints.map((f) => f.fingerprint));
+      await api.hosts.trust(
+        hostId,
+        fingerprints.map((f) => f.fingerprint),
+      );
     } catch (err) {
       setState({ phase: "error", error: err instanceof Error ? err : new Error(String(err)) });
       onChange?.();

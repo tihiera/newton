@@ -2,7 +2,13 @@ import type { ReactNode } from "react";
 import { Icon } from "../../../components/Icon";
 
 /** One row of an approval card (mockup 03): icon tile, title, lines. */
-export function DetailRow({ icon, tile = "", title, children, aside }: {
+export function DetailRow({
+  icon,
+  tile = "",
+  title,
+  children,
+  aside,
+}: {
   icon: string;
   tile?: "" | "blush" | "lavender" | "powder" | "mint";
   title: string;

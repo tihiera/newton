@@ -30,7 +30,9 @@ export function HostSettings({ host, onSaved, onClose }: { host: Host; onSaved: 
         <Field label="GPU support" error={fieldError(save.error, "gpu_support")}>
           <select className="select" value={gpu} onChange={(e) => setGpu(e.target.value)}>
             {GPU_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
         </Field>
@@ -59,7 +61,9 @@ export function HostSettings({ host, onSaved, onClose }: { host: Host; onSaved: 
           {save.busy ? <Spinner /> : null}
           Save
         </button>
-        <button className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn ghost" onClick={onClose}>
+          Cancel
+        </button>
       </div>
     </div>
   );

@@ -25,8 +25,14 @@ describe("approval text", () => {
 
   it("reads publish destinations", () => {
     expect(destinationFacts("github", { kind: "gist" }).destination).toBe("GitHub Gist");
-    expect(destinationFacts("github", { kind: "issue", repo: "o/r" })).toMatchObject({ where: "o/r", whereLabel: "Repository" });
-    expect(destinationFacts("notion", { parent_page_id: "a".repeat(32) })).toMatchObject({ destination: "Notion", whereLabel: "Parent page" });
+    expect(destinationFacts("github", { kind: "issue", repo: "o/r" })).toMatchObject({
+      where: "o/r",
+      whereLabel: "Repository",
+    });
+    expect(destinationFacts("notion", { parent_page_id: "a".repeat(32) })).toMatchObject({
+      destination: "Notion",
+      whereLabel: "Parent page",
+    });
   });
 
   it("prints any value", () => {

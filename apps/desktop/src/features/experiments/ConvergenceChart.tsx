@@ -18,7 +18,10 @@ const PH = H - M.top - M.bottom;
 function Pow({ e }: { e: number }) {
   return (
     <>
-      10<tspan dy={-6} fontSize={9}>{e}</tspan>
+      10
+      <tspan dy={-6} fontSize={9}>
+        {e}
+      </tspan>
     </>
   );
 }
@@ -35,7 +38,9 @@ export function ConvergenceChart({ series }: { series: Series[] }) {
     const x = (v: number) => M.left + ((Math.log10(v) - x0) / (x1 - x0)) * PW;
     const y = (v: number) => M.top + PH - ((Math.log10(v) - y0) / (y1 - y0)) * PH;
     let c = 0;
-    const colors = series.map((s) => (s.role === "baseline" ? BASELINE_COLOR : CANDIDATE_COLORS[c++ % CANDIDATE_COLORS.length]));
+    const colors = series.map((s) =>
+      s.role === "baseline" ? BASELINE_COLOR : CANDIDATE_COLORS[c++ % CANDIDATE_COLORS.length],
+    );
     return { xd, yd, x, y, colors };
   }, [series]);
 
@@ -50,7 +55,15 @@ export function ConvergenceChart({ series }: { series: Series[] }) {
           {series.map((s, i) => (
             <span key={s.jobId} className="ex-legend-item">
               <svg width="22" height="10" aria-hidden>
-                <line x1="1" y1="5" x2="21" y2="5" stroke={colors[i]} strokeWidth="2" strokeDasharray={s.role === "baseline" ? "4 3" : undefined} />
+                <line
+                  x1="1"
+                  y1="5"
+                  x2="21"
+                  y2="5"
+                  stroke={colors[i]}
+                  strokeWidth="2"
+                  strokeDasharray={s.role === "baseline" ? "4 3" : undefined}
+                />
                 <circle cx="11" cy="5" r="3.5" fill={colors[i]} />
               </svg>
               {s.label}
@@ -59,7 +72,12 @@ export function ConvergenceChart({ series }: { series: Series[] }) {
         </div>
       </div>
       <div className="ex-chart-box">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="L2 error against grid spacing, log-log" onMouseLeave={() => setHover(null)}>
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          aria-label="L2 error against grid spacing, log-log"
+          onMouseLeave={() => setHover(null)}
+        >
           {yd.map((e) => (
             <g key={`y${e}`}>
               <line x1={M.left} x2={W - M.right} y1={y(10 ** e)} y2={y(10 ** e)} className="ex-grid" />

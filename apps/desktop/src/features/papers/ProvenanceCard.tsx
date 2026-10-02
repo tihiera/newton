@@ -14,12 +14,19 @@ export function ProvenanceCard({ item }: { item: ResearchItem }) {
 
   return (
     <section className="card">
-      <button className="pw-provenance row" style={{ flexWrap: "nowrap", gap: 14 }} onClick={() => setOpen(!open)} aria-expanded={open}>
+      <button
+        className="pw-provenance row"
+        style={{ flexWrap: "nowrap", gap: 14 }}
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
         <span className="icon-btn outlined" style={{ width: 42, height: 42 }}>
           <Icon name="logs" />
         </span>
         <span className="spacer" style={{ minWidth: 0 }}>
-          <span className="h-card" style={{ display: "block" }}>Extraction provenance</span>
+          <span className="h-card" style={{ display: "block" }}>
+            Extraction provenance
+          </span>
           <span className="muted" style={{ display: "block", marginTop: 2 }}>
             {headline}
           </span>

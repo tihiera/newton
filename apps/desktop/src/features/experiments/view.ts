@@ -74,7 +74,10 @@ export function baselineOf(report: ValidationReport | null | undefined): Variant
 }
 
 /** The candidate a verdict is about (by label), else the first candidate. */
-export function candidateOf(report: ValidationReport | null | undefined, verdict?: CandidateVerdict): VariantEvaluation | undefined {
+export function candidateOf(
+  report: ValidationReport | null | undefined,
+  verdict?: CandidateVerdict,
+): VariantEvaluation | undefined {
   const cands = report?.variants.filter((v) => v.role === "candidate") ?? [];
   return cands.find((v) => v.label === verdict?.label) ?? cands[0];
 }
@@ -92,7 +95,11 @@ export function claimLabel(claim: string): string {
   return CLAIM_LABEL[claim] ?? claim.replace(/_/g, " ");
 }
 
-export function claimOutcome(a: Pick<Assumption, "holds">): { word: string; tone: "green" | "red" | "unknown"; icon: string } {
+export function claimOutcome(a: Pick<Assumption, "holds">): {
+  word: string;
+  tone: "green" | "red" | "unknown";
+  icon: string;
+} {
   if (a.holds === true) return { word: "Passed", tone: "green", icon: "check" };
   if (a.holds === false) return { word: "Refuted", tone: "red", icon: "x" };
   return { word: "Not tested", tone: "unknown", icon: "info" };
@@ -151,7 +158,10 @@ export function jobsMissingRuns(jobs: ReadonlyArray<Pick<Job, "id" | "state" | "
 
 /** The paper's experiments, newest first (same second: the larger id first, so the
  *  order never flickers between reads). */
-export function experimentsFor<T extends Pick<Experiment, "id" | "research_item_id" | "created_at">>(all: ReadonlyArray<T>, itemId: string): T[] {
+export function experimentsFor<T extends Pick<Experiment, "id" | "research_item_id" | "created_at">>(
+  all: ReadonlyArray<T>,
+  itemId: string,
+): T[] {
   return all
     .filter((e) => e.research_item_id === itemId)
     .sort((a, b) => b.created_at - a.created_at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
@@ -165,7 +175,10 @@ export function canPropose(item: Pick<ResearchItem, "state" | "data">): boolean 
 
 /** The experiment the tab shows: the one picked from the list while it is still there,
  *  else the latest. `mine` is newest first (experimentsFor). */
-export function shownExperiment<T extends Pick<Experiment, "id">>(mine: ReadonlyArray<T>, picked: string | null): T | undefined {
+export function shownExperiment<T extends Pick<Experiment, "id">>(
+  mine: ReadonlyArray<T>,
+  picked: string | null,
+): T | undefined {
   return mine.find((e) => e.id === picked) ?? mine[0];
 }
 
@@ -203,5 +216,10 @@ export function memoryConflict(err: unknown): MemoryConflict | null {
   if (!(err instanceof AgentdError) || err.status !== 409) return null;
   if (err.code !== "already_tested" && err.code !== "already_planned") return null;
   const id = (k: string) => (typeof err.body?.[k] === "string" ? (err.body[k] as string) : undefined);
-  return { code: err.code, message: err.message, experimentId: id("experiment_id"), researchItemId: id("research_item_id") };
+  return {
+    code: err.code,
+    message: err.message,
+    experimentId: id("experiment_id"),
+    researchItemId: id("research_item_id"),
+  };
 }

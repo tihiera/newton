@@ -49,7 +49,11 @@ export function ProfileSection({ profile, refresh }: { profile: Profile | undefi
             placeholder="How Newton greets you"
           />
         </Field>
-        <Field label="Reader model" error={fe("default_model")} hint="Reads papers, and is what “default” means in the router.">
+        <Field
+          label="Reader model"
+          error={fe("default_model")}
+          hint="Reads papers, and is what “default” means in the router."
+        >
           <DefaultModelPicker
             value={model}
             onChange={(m) => {

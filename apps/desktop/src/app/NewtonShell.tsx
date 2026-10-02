@@ -26,7 +26,11 @@ function ApprovalsButton() {
     <button className="btn approvals-btn" onClick={() => nav.open({ kind: "approvals" })}>
       <Icon name="clock" size={18} />
       Approvals
-      {n ? <span className="chip lavender" style={{ padding: "1px 8px" }}>{n}</span> : null}
+      {n ? (
+        <span className="chip lavender" style={{ padding: "1px 8px" }}>
+          {n}
+        </span>
+      ) : null}
     </button>
   );
 }

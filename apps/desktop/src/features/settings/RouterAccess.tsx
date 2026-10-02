@@ -41,28 +41,52 @@ export function RouterAccess() {
   return (
     <section className="settings-card card">
       <div className="small muted" style={{ marginBottom: 14 }}>
-        An OpenAI-compatible endpoint for other tools on this Mac. The key only runs inference; it can't change
-        anything in Newton.
+        An OpenAI-compatible endpoint for other tools on this Mac. The key only runs inference; it can't change anything
+        in Newton.
       </div>
       <div className="secret-rows">
         <div className="secret-row">
           <span className="secret-label">Base URL</span>
           <span className="secret-value mono">{creds ? creds.base_url : MASK}</span>
-          <button className="icon-btn outlined" onClick={() => copy.run("url")} disabled={copy.busy} aria-label="Copy base URL" title="Copy base URL">
+          <button
+            className="icon-btn outlined"
+            onClick={() => copy.run("url")}
+            disabled={copy.busy}
+            aria-label="Copy base URL"
+            title="Copy base URL"
+          >
             <Icon name={copied === "url" ? "check" : "copy"} size={17} />
           </button>
         </div>
         <div className="secret-row">
           <span className="secret-label">API key</span>
           <span className="secret-value mono">{creds ? creds.api_key : MASK}</span>
-          <button className="icon-btn outlined" onClick={() => copy.run("key")} disabled={copy.busy} aria-label="Copy API key" title="Copy API key">
+          <button
+            className="icon-btn outlined"
+            onClick={() => copy.run("key")}
+            disabled={copy.busy}
+            aria-label="Copy API key"
+            title="Copy API key"
+          >
             <Icon name={copied === "key" ? "check" : "copy"} size={17} />
           </button>
         </div>
       </div>
-      {creds?.note ? <div className="small muted" style={{ marginTop: 10 }}>{creds.note}</div> : null}
-      {copied ? <div className="small muted" style={{ marginTop: 8 }}>Copied to the clipboard.</div> : null}
-      {rotated && !confirmRotate ? <div className="small muted" style={{ marginTop: 8 }}>Key rotated. Tools using the old key must be updated.</div> : null}
+      {creds?.note ? (
+        <div className="small muted" style={{ marginTop: 10 }}>
+          {creds.note}
+        </div>
+      ) : null}
+      {copied ? (
+        <div className="small muted" style={{ marginTop: 8 }}>
+          Copied to the clipboard.
+        </div>
+      ) : null}
+      {rotated && !confirmRotate ? (
+        <div className="small muted" style={{ marginTop: 8 }}>
+          Key rotated. Tools using the old key must be updated.
+        </div>
+      ) : null}
 
       <div className="row" style={{ marginTop: 16 }}>
         {creds ? (
@@ -83,13 +107,17 @@ export function RouterAccess() {
       </div>
       {confirmRotate ? (
         <div className="confirm-box settings-confirm">
-          <div className="small">Rotate the router key? The current key stops working at once; tools using it must be given the new one.</div>
+          <div className="small">
+            Rotate the router key? The current key stops working at once; tools using it must be given the new one.
+          </div>
           <div className="row">
             <button className="btn danger" onClick={() => rotate.run()} disabled={rotate.busy}>
               {rotate.busy ? <Spinner /> : null}
               Rotate key
             </button>
-            <button className="btn ghost" onClick={() => setConfirmRotate(false)}>Cancel</button>
+            <button className="btn ghost" onClick={() => setConfirmRotate(false)}>
+              Cancel
+            </button>
           </div>
         </div>
       ) : null}

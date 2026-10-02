@@ -21,11 +21,24 @@ interface Form {
   parallel: string;
 }
 
-const EMPTY: Form = { host_id: "", name: "", engine: "ollama", model: "", revision: "", memory_gb: "", context_length: "", parallel: "" };
+const EMPTY: Form = {
+  host_id: "",
+  name: "",
+  engine: "ollama",
+  model: "",
+  revision: "",
+  memory_gb: "",
+  context_length: "",
+  parallel: "",
+};
 
 const numberOrUndefined = (s: string) => (s.trim() === "" ? undefined : Number(s));
 
-export function NewServiceForm({ hosts, onCreated, onClose }: {
+export function NewServiceForm({
+  hosts,
+  onCreated,
+  onClose,
+}: {
   hosts: Host[] | undefined;
   onCreated: () => void;
   onClose: () => void;
@@ -60,7 +73,8 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
   const err = create.error;
   const fe = (name: string) => fieldError(err, name);
   // A 422 about something without its own input (or a 409/400) shows as one sentence.
-  const otherError = Boolean(err) && (!Object.keys(create.fields).length || Object.keys(create.fields).some((k) => !(k in EMPTY)));
+  const otherError =
+    Boolean(err) && (!Object.keys(create.fields).length || Object.keys(create.fields).some((k) => !(k in EMPTY)));
 
   if (created) {
     const { service, approval } = created;
@@ -69,8 +83,8 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
         {service.state === "awaiting_approval" ? (
           <>
             <Note icon="clock">
-              <b>{service.name}</b> needs your approval before it starts (it downloads the model or runs
-              model-supplied code). Nothing runs until you approve it.
+              <b>{service.name}</b> needs your approval before it starts (it downloads the model or runs model-supplied
+              code). Nothing runs until you approve it.
             </Note>
             <div className="row">
               <button
@@ -79,7 +93,9 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
               >
                 Review approval
               </button>
-              <button className="btn ghost" onClick={onClose}>Later</button>
+              <button className="btn ghost" onClick={onClose}>
+                Later
+              </button>
             </div>
           </>
         ) : (
@@ -88,10 +104,18 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
               <b>{service.name}</b> was created and is starting. It shows in the services list.
             </Note>
             <div className="row">
-              <button className="btn" onClick={() => { setCreated(null); setForm((f) => ({ ...EMPTY, host_id: f.host_id })); }}>
+              <button
+                className="btn"
+                onClick={() => {
+                  setCreated(null);
+                  setForm((f) => ({ ...EMPTY, host_id: f.host_id }));
+                }}
+              >
                 Add another
               </button>
-              <button className="btn ghost" onClick={onClose}>Close</button>
+              <button className="btn ghost" onClick={onClose}>
+                Close
+              </button>
             </div>
           </>
         )}
@@ -111,7 +135,9 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
         <span className="icon-tile blush" style={{ width: 40, height: 40, borderRadius: 12 }}>
           <Icon name="model" size={20} />
         </span>
-        <div className="h-card" style={{ flex: 1 }}>New model service</div>
+        <div className="h-card" style={{ flex: 1 }}>
+          New model service
+        </div>
         <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
           <Icon name="x" size={18} />
         </button>
@@ -120,22 +146,37 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
         <Field label="Machine" error={fe("host_id")}>
           <select className="select" value={hostId} onChange={set("host_id")}>
             {(hosts ?? []).map((h) => (
-              <option key={h.id} value={h.id}>{h.name}</option>
+              <option key={h.id} value={h.id}>
+                {h.name}
+              </option>
             ))}
           </select>
         </Field>
         <Field label="Name" error={fe("name")}>
-          <input className={`input ${fe("name") ? "invalid" : ""}`} value={form.name} onChange={set("name")} placeholder="reader" />
+          <input
+            className={`input ${fe("name") ? "invalid" : ""}`}
+            value={form.name}
+            onChange={set("name")}
+            placeholder="reader"
+          />
         </Field>
         <Field label="Engine" error={fe("engine")}>
           <select className="select" value={form.engine} onChange={set("engine")}>
             {ENGINES.map((e) => (
-              <option key={e} value={e}>{e}</option>
+              <option key={e} value={e}>
+                {e}
+              </option>
             ))}
           </select>
         </Field>
         <Field label="Model" error={fe("model")}>
-          <input className={`input ${fe("model") ? "invalid" : ""}`} value={form.model} onChange={set("model")} placeholder="llama3.2:3b" spellCheck={false} />
+          <input
+            className={`input ${fe("model") ? "invalid" : ""}`}
+            value={form.model}
+            onChange={set("model")}
+            placeholder="llama3.2:3b"
+            spellCheck={false}
+          />
         </Field>
         <div className="span-2">
           <Field
@@ -143,17 +184,41 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
             error={fe("revision")}
             hint="Required: the Ollama manifest digest, or the 40-hex commit for vLLM and MLX."
           >
-            <input className={`input mono ${fe("revision") ? "invalid" : ""}`} value={form.revision} onChange={set("revision")} spellCheck={false} />
+            <input
+              className={`input mono ${fe("revision") ? "invalid" : ""}`}
+              value={form.revision}
+              onChange={set("revision")}
+              spellCheck={false}
+            />
           </Field>
         </div>
         <Field label="Memory (GB)" error={fe("memory_gb")}>
-          <input className={`input ${fe("memory_gb") ? "invalid" : ""}`} type="number" step="any" min={0} value={form.memory_gb} onChange={set("memory_gb")} />
+          <input
+            className={`input ${fe("memory_gb") ? "invalid" : ""}`}
+            type="number"
+            step="any"
+            min={0}
+            value={form.memory_gb}
+            onChange={set("memory_gb")}
+          />
         </Field>
         <Field label="Context length" error={fe("context_length")} hint="Empty: agentd's default">
-          <input className={`input ${fe("context_length") ? "invalid" : ""}`} type="number" min={0} value={form.context_length} onChange={set("context_length")} />
+          <input
+            className={`input ${fe("context_length") ? "invalid" : ""}`}
+            type="number"
+            min={0}
+            value={form.context_length}
+            onChange={set("context_length")}
+          />
         </Field>
         <Field label="Parallel requests" error={fe("parallel")} hint="Empty: agentd's default">
-          <input className={`input ${fe("parallel") ? "invalid" : ""}`} type="number" min={1} value={form.parallel} onChange={set("parallel")} />
+          <input
+            className={`input ${fe("parallel") ? "invalid" : ""}`}
+            type="number"
+            min={1}
+            value={form.parallel}
+            onChange={set("parallel")}
+          />
         </Field>
       </div>
       {otherError ? <ErrorNote error={err} /> : null}

@@ -5,7 +5,11 @@ import type { Experiment } from "../../api";
 import { EvidenceBadge, StateChip } from "../../components/ui";
 import { when } from "../../components/time";
 
-export function EarlierExperiments({ experiments, shownId, onShow }: {
+export function EarlierExperiments({
+  experiments,
+  shownId,
+  onShow,
+}: {
   experiments: Experiment[];
   shownId: string;
   onShow: (id: string) => void;

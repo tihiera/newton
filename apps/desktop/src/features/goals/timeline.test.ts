@@ -4,7 +4,12 @@ import { buildTimeline, paperPhase, pollLine, variantsLine } from "./timeline";
 
 const G = "goal-1";
 
-function paper(id: string, state: ResearchItem["state"], over: Partial<ResearchItem> = {}, data: ResearchItem["data"] = {}): ResearchItem {
+function paper(
+  id: string,
+  state: ResearchItem["state"],
+  over: Partial<ResearchItem> = {},
+  data: ResearchItem["data"] = {},
+): ResearchItem {
   return {
     id,
     goal_id: G,
@@ -23,7 +28,15 @@ function paper(id: string, state: ResearchItem["state"], over: Partial<ResearchI
 const card = {
   relevant: true,
   summary: "s",
-  method: { name: "MUSCL", limiter: "van_leer", second_order_correction: true, time_integration: "rk2", order: 2, max_cfl: 0.8, tvd: true },
+  method: {
+    name: "MUSCL",
+    limiter: "van_leer",
+    second_order_correction: true,
+    time_integration: "rk2",
+    order: 2,
+    max_cfl: 0.8,
+    tvd: true,
+  },
   claims: [],
   benchmarks: [],
 };
@@ -58,7 +71,16 @@ function experiment(id: string, over: Partial<Experiment> = {}): Experiment {
   };
 }
 
-const poll: PollSummary = { goal_id: G, found: 8, new: 8, relevant: 3, dismissed: 5, carded: 1, proposed: [], skipped: [] };
+const poll: PollSummary = {
+  goal_id: G,
+  found: 8,
+  new: 8,
+  relevant: 3,
+  dismissed: 5,
+  carded: 1,
+  proposed: [],
+  skipped: [],
+};
 
 function ev(id: number, kind: string, data: Record<string, unknown>, ts = id, entity_id = G): AgentdEvent {
   return { id, ts, entity_type: "goal", entity_id, kind, data };
@@ -102,19 +124,52 @@ describe("buildTimeline", () => {
   it("attaches pending approvals to the goal's experiments and adds results", () => {
     const papers = [paper("paper-c", "experiment_planned", {}, { card })];
     const approvals: Approval[] = [
-      { id: "req-1", kind: "execute_experiment", subject_type: "experiment", subject_id: "exp-1", title: "Run", details: {}, status: "pending", created_at: 41 },
-      { id: "req-2", kind: "execute_experiment", subject_type: "experiment", subject_id: "exp-9", title: "Run", details: {}, status: "pending", created_at: 41 },
+      {
+        id: "req-1",
+        kind: "execute_experiment",
+        subject_type: "experiment",
+        subject_id: "exp-1",
+        title: "Run",
+        details: {},
+        status: "pending",
+        created_at: 41,
+      },
+      {
+        id: "req-2",
+        kind: "execute_experiment",
+        subject_type: "experiment",
+        subject_id: "exp-9",
+        title: "Run",
+        details: {},
+        status: "pending",
+        created_at: 41,
+      },
     ];
     const finding: Finding = {
-      id: "finding-1", goal_id: G, research_item_id: "paper-c", experiment_id: "exp-2", scheme_name: "vanleer",
-      scheme_digest: null, evidence: "yellow", claims: [{ claim: "tvd", claimed: true, holds: false }], summary: "Better, TVD refuted", created_at: 90,
+      id: "finding-1",
+      goal_id: G,
+      research_item_id: "paper-c",
+      experiment_id: "exp-2",
+      scheme_name: "vanleer",
+      scheme_digest: null,
+      evidence: "yellow",
+      claims: [{ claim: "tvd", claimed: true, holds: false }],
+      summary: "Better, TVD refuted",
+      created_at: 90,
     };
     const orphan: Finding = { ...finding, id: "finding-2", experiment_id: "exp-gone", created_at: 95 };
     const experiments = [
       experiment("exp-1"),
       experiment("exp-2", { state: "reported", evidence: "yellow", created_at: 50, updated_at: 80 }),
       experiment("exp-3", { research_item_id: "paper-elsewhere" }),
-      experiment("exp-4", { research_item_id: null, goal_id: G, state: "failed", error: "boom", created_at: 60, updated_at: 70 }),
+      experiment("exp-4", {
+        research_item_id: null,
+        goal_id: G,
+        state: "failed",
+        error: "boom",
+        created_at: 60,
+        updated_at: 70,
+      }),
     ];
     const t = buildTimeline({ goalId: G, events: [], papers, experiments, approvals, findings: [finding, orphan] });
     const keys = t.map((e) => e.key);
@@ -141,9 +196,18 @@ describe("helpers", () => {
   });
   it("poll line", () => {
     expect(pollLine(poll)).toBe("8 found · 3 relevant · 5 dismissed · 1 carded");
-    expect(pollLine({ ...poll, found: 25, new: 2, relevant: 0, dismissed: 0, carded: 0, proposed: ["exp-1"], skipped: [{ item: "p", why: "x" }] })).toBe(
-      "25 found · 2 new · 1 proposed · 1 skipped",
-    );
+    expect(
+      pollLine({
+        ...poll,
+        found: 25,
+        new: 2,
+        relevant: 0,
+        dismissed: 0,
+        carded: 0,
+        proposed: ["exp-1"],
+        skipped: [{ item: "p", why: "x" }],
+      }),
+    ).toBe("25 found · 2 new · 1 proposed · 1 skipped");
   });
   it("variants line", () => {
     expect(variantsLine(experiment("e"))).toBe("upwind vs vanleer");

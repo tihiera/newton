@@ -35,7 +35,9 @@ export function AwaitingCard({ exp }: { exp: Experiment }) {
           <div className="ex-variant" key={`${v.role}-${v.label}`}>
             <div className="small muted">{v.role === "baseline" ? "Baseline" : "Candidate"}</div>
             <div className="ex-variant-name">{v.label}</div>
-            <div className="mono muted">{v.params.scheme === "ir" ? v.params.scheme_ir?.name ?? "ir" : v.params.scheme}</div>
+            <div className="mono muted">
+              {v.params.scheme === "ir" ? (v.params.scheme_ir?.name ?? "ir") : v.params.scheme}
+            </div>
           </div>
         ))}
       </div>

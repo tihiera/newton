@@ -10,12 +10,26 @@ import { ago } from "../../components/time";
 import { ConnectPanel } from "./ConnectPanel";
 import { HostSettings } from "./HostSettings";
 import { RemoveHost } from "./RemoveHost";
-import { canInstallGpu, capabilityChips, deviceName, gpuTaskLine, memoryLine, needsConnect, statusChip, workerVersion } from "./hostView";
+import {
+  canInstallGpu,
+  capabilityChips,
+  deviceName,
+  gpuTaskLine,
+  memoryLine,
+  needsConnect,
+  statusChip,
+  workerVersion,
+} from "./hostView";
 import { useHostConnect } from "./useHostConnect";
 
 type Panel = "settings" | "remove" | null;
 
-export function HostCard({ host, refresh, autoConnect, onAutoConnectStarted }: {
+export function HostCard({
+  host,
+  refresh,
+  autoConnect,
+  onAutoConnectStarted,
+}: {
   host: Host;
   refresh: () => void;
   /** Just added from ~/.ssh/config: connect once, right away (the host key still needs the user). */
@@ -65,12 +79,16 @@ export function HostCard({ host, refresh, autoConnect, onAutoConnectStarted }: {
         <div className="host-info">
           <div className="h-card host-name">{host.name}</div>
           {lines.map((l) => (
-            <div key={l} className="host-line">{l}</div>
+            <div key={l} className="host-line">
+              {l}
+            </div>
           ))}
           {host.kind === "ssh" && host.ssh_target ? <div className="host-line mono">{host.ssh_target}</div> : null}
           <div className="row host-chips">
             {chips.map((c) => (
-              <Chip key={c.key} tone={c.ok ? "lavender" : "gray"}>{c.label}</Chip>
+              <Chip key={c.key} tone={c.ok ? "lavender" : "gray"}>
+                {c.label}
+              </Chip>
             ))}
             <Chip tone={status.tone}>
               <span className={`dot ${status.dot}`} />
@@ -95,17 +113,21 @@ export function HostCard({ host, refresh, autoConnect, onAutoConnectStarted }: {
 
       {task ? (
         task.tone === "busy" ? (
-          <div className="compute-progress small muted"><Spinner /> {task.text}</div>
+          <div className="compute-progress small muted">
+            <Spinner /> {task.text}
+          </div>
         ) : (
           <ErrorNote>{task.text}</ErrorNote>
         )
       ) : null}
 
-      {chips.filter((c) => !c.ok && c.reason).map((c) => (
-        <div key={c.key} className="small muted cap-reason">
-          <b>{c.label}:</b> {c.reason}
-        </div>
-      ))}
+      {chips
+        .filter((c) => !c.ok && c.reason)
+        .map((c) => (
+          <div key={c.key} className="small muted cap-reason">
+            <b>{c.label}:</b> {c.reason}
+          </div>
+        ))}
 
       {host.last_error && !(conn.state.phase === "error" && conn.state.error.message === host.last_error) ? (
         <div className="note warn host-error">{host.last_error}</div>
@@ -153,7 +175,12 @@ export function HostCard({ host, refresh, autoConnect, onAutoConnectStarted }: {
             Self-test <span className="mono">{selftest.id}</span>
             <StateChip kind="job" state={selftest.state} />
           </div>
-          <button className="icon-btn" style={{ width: 26, height: 26, marginLeft: "auto" }} onClick={() => setSelftest(null)} aria-label="Dismiss">
+          <button
+            className="icon-btn"
+            style={{ width: 26, height: 26, marginLeft: "auto" }}
+            onClick={() => setSelftest(null)}
+            aria-label="Dismiss"
+          >
             <Icon name="x" size={14} />
           </button>
         </div>

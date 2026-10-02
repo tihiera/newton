@@ -39,7 +39,9 @@ function hostKeys(v: unknown): HostKeyFingerprint[] | undefined {
   if (!Array.isArray(v)) return undefined;
   return v.map((k) => {
     const o = k && typeof k === "object" ? (k as Record<string, unknown>) : null;
-    return o ? { type: String(o.type ?? ""), fingerprint: String(o.fingerprint ?? "") } : { type: "", fingerprint: String(k) };
+    return o
+      ? { type: String(o.type ?? ""), fingerprint: String(o.fingerprint ?? "") }
+      : { type: "", fingerprint: String(k) };
   });
 }
 
@@ -78,7 +80,11 @@ interface ValidationItem {
 
 /** The human sentence and structured parts of an agentd error body. Handles
  *  `{error, code?}`, the router's `{error: {message, code}}` and FastAPI 422s. */
-export function parseErrorBody(status: number, body: unknown, fallback: string): AgentdErrorInfo & {
+export function parseErrorBody(
+  status: number,
+  body: unknown,
+  fallback: string,
+): AgentdErrorInfo & {
   message: string;
 } {
   if (body && typeof body === "object") {

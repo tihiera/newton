@@ -72,7 +72,11 @@ export function SchemeMapping({ item }: { item: ResearchItem }) {
               </>
             ) : null}
           </div>
-          {note ? <p className="small muted" style={{ marginTop: 12 }}>{note}</p> : null}
+          {note ? (
+            <p className="small muted" style={{ marginTop: 12 }}>
+              {note}
+            </p>
+          ) : null}
         </>
       ) : (
         <div className="stack" style={{ gap: 10 }}>

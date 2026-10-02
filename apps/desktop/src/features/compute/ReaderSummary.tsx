@@ -14,14 +14,20 @@ export function ReaderSummary({ hosts }: { hosts: Host[] | undefined }) {
   const router = useRouterStatus();
   const services = useServices();
   const line = readerLine(profile.data, router.data, services.data);
-  const hostName = line.hostId ? hosts?.find((h) => h.id === line.hostId)?.name ?? line.hostId : null;
+  const hostName = line.hostId ? (hosts?.find((h) => h.id === line.hostId)?.name ?? line.hostId) : null;
 
   return (
     <div className="card reader-card">
       <Thumb seed={line.model ?? "reader"} size={60} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="h-card reader-title">
-          Reader{line.model ? <> · <span className="reader-model">{line.model}</span></> : null}
+          Reader
+          {line.model ? (
+            <>
+              {" "}
+              · <span className="reader-model">{line.model}</span>
+            </>
+          ) : null}
         </div>
         <div className="row" style={{ marginTop: 6, gap: 12 }}>
           {hostName ? (

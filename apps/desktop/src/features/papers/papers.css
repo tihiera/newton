@@ -147,8 +147,7 @@
   background:
     radial-gradient(70% 90% at 15% 20%, rgba(251, 230, 162, 0.55), transparent 70%),
     radial-gradient(70% 90% at 60% 90%, rgba(248, 201, 221, 0.5), transparent 70%),
-    radial-gradient(70% 90% at 95% 30%, rgba(199, 220, 247, 0.6), transparent 70%),
-    #fbf9f6;
+    radial-gradient(70% 90% at 95% 30%, rgba(199, 220, 247, 0.6), transparent 70%), #fbf9f6;
   margin: 6px 0 14px;
 }
 .scheme-doc {
@@ -157,8 +156,7 @@
   border-radius: 14px;
   background:
     radial-gradient(70% 70% at 25% 30%, rgba(251, 230, 162, 0.95), transparent 70%),
-    radial-gradient(70% 70% at 80% 70%, rgba(243, 163, 200, 0.85), transparent 70%),
-    #f3eefc;
+    radial-gradient(70% 70% at 80% 70%, rgba(243, 163, 200, 0.85), transparent 70%), #f3eefc;
   display: flex;
   flex-direction: column;
   justify-content: center;

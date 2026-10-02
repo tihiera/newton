@@ -15,7 +15,15 @@ const INFO: Record<Target, { name: string; icon: string; tile: string; hint: str
   notion: { name: "Notion", icon: "notion", tile: "blush", hint: "Publish reports as pages under a parent page." },
 };
 
-function ConnectorRow({ target, connected, refresh }: { target: Target; connected: boolean | undefined; refresh: () => void }) {
+function ConnectorRow({
+  target,
+  connected,
+  refresh,
+}: {
+  target: Target;
+  connected: boolean | undefined;
+  refresh: () => void;
+}) {
   const info = INFO[target];
   const [token, setToken] = useState("");
   const [confirm, setConfirm] = useState(false);
@@ -47,9 +55,13 @@ function ConnectorRow({ target, connected, refresh }: { target: Target; connecte
           <div className="small muted">{info.hint}</div>
         </div>
         {connected === undefined ? null : connected ? (
-          <Chip tone="green"><span className="dot ok" /> Connected</Chip>
+          <Chip tone="green">
+            <span className="dot ok" /> Connected
+          </Chip>
         ) : (
-          <Chip><span className="dot hollow" /> Not connected</Chip>
+          <Chip>
+            <span className="dot hollow" /> Not connected
+          </Chip>
         )}
       </div>
 
@@ -93,11 +105,15 @@ function ConnectorRow({ target, connected, refresh }: { target: Target; connecte
               {disconnect.busy ? <Spinner /> : null}
               Disconnect
             </button>
-            <button className="btn ghost" onClick={() => setConfirm(false)}>Cancel</button>
+            <button className="btn ghost" onClick={() => setConfirm(false)}>
+              Cancel
+            </button>
           </div>
         ) : (
           <div className="row">
-            <button className="btn ghost danger" onClick={() => setConfirm(true)}>Disconnect</button>
+            <button className="btn ghost danger" onClick={() => setConfirm(true)}>
+              Disconnect
+            </button>
           </div>
         )
       ) : null}

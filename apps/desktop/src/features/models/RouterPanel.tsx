@@ -5,7 +5,11 @@ import type { Host, RouterStatus } from "../../api";
 import { Icon } from "../../components/Icon";
 import { ErrorNote } from "../../components/ui";
 
-export function RouterPanel({ status, error, hosts }: {
+export function RouterPanel({
+  status,
+  error,
+  hosts,
+}: {
   status: RouterStatus | undefined;
   error: Error | undefined;
   hosts: Host[] | undefined;
@@ -36,11 +40,15 @@ export function RouterPanel({ status, error, hosts }: {
               Paused for a timed run: job <span className="mono">{l.job_id}</span> on {hostName(l.host_id)}
             </div>
             <div className="small">
-              {l.granted ? "The timed run has the machine to itself." : `The timed run is waiting on ${l.waiting_on ?? "the router"}.`}
+              {l.granted
+                ? "The timed run has the machine to itself."
+                : `The timed run is waiting on ${l.waiting_on ?? "the router"}.`}
               {l.in_flight ? ` ${l.in_flight} request(s) in flight.` : ""}
             </div>
             {l.caveats.map((c) => (
-              <div key={c} className="small">{c}</div>
+              <div key={c} className="small">
+                {c}
+              </div>
             ))}
           </div>
         </div>

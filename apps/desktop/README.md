@@ -20,13 +20,13 @@ pnpm dev:repo      # tauri dev, reading the token from <repo>/.data (matches scr
 pnpm dev           # tauri dev, using the default data dir (~/Library/Application Support/Newton)
 ```
 
-| Script | What it does |
-|---|---|
-| `pnpm dev` / `pnpm dev:repo` | `tauri dev` (Vite on :1420 plus the native window) |
-| `pnpm build` | Type-check and build the frontend into `dist/` |
-| `pnpm bundle` | `tauri build` (Newton.app + dmg) |
-| `pnpm typecheck` | `tsc` for `src/` and `vite.config.ts` |
-| `pnpm test` | vitest (API client, with fetch and the Tauri invoke mocked) |
+| Script                       | What it does                                                |
+| ---------------------------- | ----------------------------------------------------------- |
+| `pnpm dev` / `pnpm dev:repo` | `tauri dev` (Vite on :1420 plus the native window)          |
+| `pnpm build`                 | Type-check and build the frontend into `dist/`              |
+| `pnpm bundle`                | `tauri build` (Newton.app + dmg)                            |
+| `pnpm typecheck`             | `tsc` for `src/` and `vite.config.ts`                       |
+| `pnpm test`                  | vitest (API client, with fetch and the Tauri invoke mocked) |
 
 Rust tests: `cd src-tauri && cargo test`.
 

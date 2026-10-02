@@ -15,7 +15,10 @@ import {
 describe("publishRequest", () => {
   it("maps each choice to agentd's shape", () => {
     expect(publishRequest("gist", "x", "y")).toEqual({ target: "github", destination: {} });
-    expect(publishRequest("issue", " o/r ", "")).toEqual({ target: "github", destination: { kind: "issue", repo: "o/r" } });
+    expect(publishRequest("issue", " o/r ", "")).toEqual({
+      target: "github",
+      destination: { kind: "issue", repo: "o/r" },
+    });
     expect(publishRequest("notion", "", " abc ")).toEqual({ target: "notion", destination: { parent_page_id: "abc" } });
   });
   it("knows what is missing", () => {
@@ -35,7 +38,12 @@ describe("needsPageSearch", () => {
   });
 });
 
-const page = (n: number): NotionPage => ({ id: n.toString(16).padStart(32, "0"), title: `Page ${n}`, url: null, icon: null });
+const page = (n: number): NotionPage => ({
+  id: n.toString(16).padStart(32, "0"),
+  title: `Page ${n}`,
+  url: null,
+  icon: null,
+});
 const pages = (count: number) => Array.from({ length: count }, (_, i) => page(i + 1));
 
 describe("takePageAnswer", () => {

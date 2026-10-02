@@ -37,7 +37,10 @@ describe("stepOf", () => {
   it("places failures where they stopped", () => {
     expect(stepOf({ state: "rejected", evaluation: null })).toEqual({ current: 0, failed: true });
     expect(stepOf({ state: "cancelled", evaluation: null, jobs: [] })).toEqual({ current: 0, failed: true });
-    expect(stepOf({ state: "failed", evaluation: null, jobs: [{ started_at: 1 } as Job] })).toEqual({ current: 1, failed: true });
+    expect(stepOf({ state: "failed", evaluation: null, jobs: [{ started_at: 1 } as Job] })).toEqual({
+      current: 1,
+      failed: true,
+    });
     expect(stepOf({ state: "failed", evaluation: {} as ValidationReport })).toEqual({ current: 2, failed: true });
   });
 });
@@ -52,10 +55,14 @@ describe("headline", () => {
     expect(headline("unknown")).toBe("Inconclusive");
   });
   it("picks the verdict matching the overall evidence", () => {
-    const report = { evidence: "yellow", verdicts: [verdict("green", [], "a"), verdict("yellow", [], "b")], variants: [
-      { label: "a", role: "candidate" },
-      { label: "b", role: "candidate" },
-    ] } as unknown as ValidationReport;
+    const report = {
+      evidence: "yellow",
+      verdicts: [verdict("green", [], "a"), verdict("yellow", [], "b")],
+      variants: [
+        { label: "a", role: "candidate" },
+        { label: "b", role: "candidate" },
+      ],
+    } as unknown as ValidationReport;
     const v = leadVerdict(report);
     expect(v?.label).toBe("b");
     expect(candidateOf(report, v)?.label).toBe("b");
@@ -71,7 +78,11 @@ describe("claims", () => {
 });
 
 describe("convergence", () => {
-  const job = (id: string, role: string, runs: unknown[] | undefined): Pick<Job, "id" | "label" | "role" | "results" | "state"> => ({
+  const job = (
+    id: string,
+    role: string,
+    runs: unknown[] | undefined,
+  ): Pick<Job, "id" | "label" | "role" | "results" | "state"> => ({
     id,
     label: id,
     role,
@@ -84,7 +95,10 @@ describe("convergence", () => {
         { nx: 64, dx: 1 / 64, l2_error: 1e-4 },
         { nx: 32, dx: 1 / 32, l2_error: 4e-4 },
       ]),
-      job("b", "baseline", [{ nx: 32, dx: 1 / 32, l2_error: 1e-2 }, { nx: 64, dx: 1 / 64 }]),
+      job("b", "baseline", [
+        { nx: 32, dx: 1 / 32, l2_error: 1e-2 },
+        { nx: 64, dx: 1 / 64 },
+      ]),
       job("t", "candidate", [{ nx: 64, runtime_s: 1 }]),
     ]);
     expect(s.map((x) => x.label)).toEqual(["b", "c"]);
@@ -149,7 +163,10 @@ describe("memoryConflict", () => {
   const err = (status: number, code: string | undefined, body: Record<string, unknown> = {}) =>
     new AgentdError("http", String(body.error ?? "nope"), { status, code, body: { ...body, code } });
   it("reads agentd's 409 already_tested verbatim, with the experiment it names", () => {
-    const e = err(409, "already_tested", { error: "the same scheme was tested in exp_1 (yellow)", experiment_id: "exp_1" });
+    const e = err(409, "already_tested", {
+      error: "the same scheme was tested in exp_1 (yellow)",
+      experiment_id: "exp_1",
+    });
     expect(memoryConflict(e)).toEqual({
       code: "already_tested",
       message: "the same scheme was tested in exp_1 (yellow)",
@@ -158,7 +175,10 @@ describe("memoryConflict", () => {
     });
   });
   it("reads already_planned with the paper it names", () => {
-    const e = err(409, "already_planned", { error: "the same scheme is already planned (from ri_2)", research_item_id: "ri_2" });
+    const e = err(409, "already_planned", {
+      error: "the same scheme is already planned (from ri_2)",
+      research_item_id: "ri_2",
+    });
     expect(memoryConflict(e)?.researchItemId).toBe("ri_2");
     expect(memoryConflict(e)?.message).toBe("the same scheme is already planned (from ri_2)");
   });

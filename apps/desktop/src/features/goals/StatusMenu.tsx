@@ -16,7 +16,11 @@ const ACTIONS: Record<GoalStatus, Array<{ to: GoalStatus; label: string; icon: s
 };
 
 /** Pause / resume / archive, in a small menu next to the status. */
-export function StatusMenu({ status, busy, onChange }: {
+export function StatusMenu({
+  status,
+  busy,
+  onChange,
+}: {
   status: GoalStatus;
   busy: boolean;
   onChange: (status: GoalStatus) => void;

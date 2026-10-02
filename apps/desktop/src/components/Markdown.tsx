@@ -79,7 +79,7 @@ export function Markdown({ text, loadImage }: { text: string; loadImage?: ImageL
     }
     const h = /^(#{1,3})\s+(.*)$/.exec(line);
     if (h) {
-      const Tag = (`h${h[1].length}` as "h1" | "h2" | "h3");
+      const Tag = `h${h[1].length}` as "h1" | "h2" | "h3";
       blocks.push(<Tag key={key}>{inline(h[2], key)}</Tag>);
       i++;
       continue;
@@ -92,7 +92,11 @@ export function Markdown({ text, loadImage }: { text: string; loadImage?: ImageL
     if (line.startsWith("|")) {
       const rows: string[][] = [];
       while (i < lines.length && lines[i].startsWith("|")) {
-        const cells = lines[i].trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        const cells = lines[i]
+          .trim()
+          .replace(/^\||\|$/g, "")
+          .split("|")
+          .map((c) => c.trim());
         if (!cells.every((c) => /^:?-{2,}:?$/.test(c))) rows.push(cells);
         i++;
       }
@@ -100,11 +104,19 @@ export function Markdown({ text, loadImage }: { text: string; loadImage?: ImageL
       blocks.push(
         <table key={key}>
           <thead>
-            <tr>{head?.map((c, j) => <th key={j}>{inline(c, `${key}h${j}`)}</th>)}</tr>
+            <tr>
+              {head?.map((c, j) => (
+                <th key={j}>{inline(c, `${key}h${j}`)}</th>
+              ))}
+            </tr>
           </thead>
           <tbody>
             {body.map((r, ri) => (
-              <tr key={ri}>{r.map((c, j) => <td key={j}>{inline(c, `${key}${ri}-${j}`)}</td>)}</tr>
+              <tr key={ri}>
+                {r.map((c, j) => (
+                  <td key={j}>{inline(c, `${key}${ri}-${j}`)}</td>
+                ))}
+              </tr>
             ))}
           </tbody>
         </table>,
@@ -119,7 +131,9 @@ export function Markdown({ text, loadImage }: { text: string; loadImage?: ImageL
       }
       blocks.push(
         <ul key={key}>
-          {items.map((it, j) => <li key={j}>{inline(it, `${key}-${j}`)}</li>)}
+          {items.map((it, j) => (
+            <li key={j}>{inline(it, `${key}-${j}`)}</li>
+          ))}
         </ul>,
       );
       continue;

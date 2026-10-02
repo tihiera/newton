@@ -40,10 +40,14 @@ describe("openExternal", () => {
   });
 
   it("refuses non-web links and passes the shell's refusal on as an Error", async () => {
-    const d = deps(true, { openUrl: vi.fn(async () => Promise.reject("Not allowed to open url https://evil.example")) });
+    const d = deps(true, {
+      openUrl: vi.fn(async () => Promise.reject("Not allowed to open url https://evil.example")),
+    });
     const p = createPlatform(d);
     await expect(p.openExternal("javascript:alert(1)")).rejects.toThrow(/only web links/);
-    await expect(p.openExternal("https://evil.example")).rejects.toThrow("Not allowed to open url https://evil.example");
+    await expect(p.openExternal("https://evil.example")).rejects.toThrow(
+      "Not allowed to open url https://evil.example",
+    );
   });
 });
 
@@ -62,7 +66,6 @@ describe("saveFile", () => {
     // src-tauri/src/files.rs pins the same literal in `name_header_matches_the_ui`.
     expect(FILE_NAME_HEADER).toBe("x-newton-file-name");
   });
-
 
   it("sends the bytes raw and the name in a header to save_file", async () => {
     const d = deps(true);

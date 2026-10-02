@@ -132,8 +132,12 @@ describe("agentd client", () => {
   });
 
   it("maps FastAPI 422s onto fields", async () => {
-    const body = { detail: [{ loc: ["body", "title"], msg: "String should have at least 1 character" },
-                            { loc: ["body", "keywords", 0], msg: "Value error, bad keyword" }] };
+    const body = {
+      detail: [
+        { loc: ["body", "title"], msg: "String should have at least 1 character" },
+        { loc: ["body", "keywords", 0], msg: "Value error, bad keyword" },
+      ],
+    };
     const fetch = vi.fn<FetchFn>(async () => json(body, 422));
     const client = createAgentdClient({ invoke: invokeOk(), fetch });
     const err = await caught(client.request("/goals", { method: "POST", body: {} }));
@@ -146,15 +150,21 @@ describe("agentd client", () => {
   });
 
   it("files a nested (non-list) field under its own name only", async () => {
-    const body = { detail: [{ loc: ["body", "settings", "memory_gb"], msg: "Input should be less than or equal to 1024" }] };
+    const body = {
+      detail: [{ loc: ["body", "settings", "memory_gb"], msg: "Input should be less than or equal to 1024" }],
+    };
     const client = createAgentdClient({ invoke: invokeOk(), fetch: vi.fn<FetchFn>(async () => json(body, 422)) });
     const err = await caught(client.request("/services", { method: "POST", body: {} }));
     expect(err.fields).toEqual({ memory_gb: "Input should be less than or equal to 1024" });
   });
 
   it("lets a list's own 422 win over one copied from an item", async () => {
-    const body = { detail: [{ loc: ["body", "keywords", 2], msg: "bad keyword" },
-                            { loc: ["body", "keywords"], msg: "List should have at most 10 items" }] };
+    const body = {
+      detail: [
+        { loc: ["body", "keywords", 2], msg: "bad keyword" },
+        { loc: ["body", "keywords"], msg: "List should have at most 10 items" },
+      ],
+    };
     const client = createAgentdClient({ invoke: invokeOk(), fetch: vi.fn<FetchFn>(async () => json(body, 422)) });
     const err = await caught(client.request("/goals", { method: "POST", body: {} }));
     expect(err.fields.keywords).toBe("List should have at most 10 items");
@@ -162,7 +172,11 @@ describe("agentd client", () => {
   });
 
   it("keeps the whole body of {error, code, ...} errors", async () => {
-    const body = { error: "the same scheme was tested in exp-1 (yellow)", code: "already_tested", experiment_id: "exp-1" };
+    const body = {
+      error: "the same scheme was tested in exp-1 (yellow)",
+      code: "already_tested",
+      experiment_id: "exp-1",
+    };
     const client = createAgentdClient({ invoke: invokeOk(), fetch: vi.fn<FetchFn>(async () => json(body, 409)) });
     const err = await caught(client.request("/research/items/p/propose", { method: "POST", body: {} }));
     expect(err.code).toBe("already_tested");
@@ -171,11 +185,14 @@ describe("agentd client", () => {
   });
 
   it("keeps host-key fingerprints from a 409 and reads router-style errors", async () => {
-    const fp = vi.fn<FetchFn>(async () => json({ error: "unknown host key", fingerprints: [{ type: "ssh-ed25519", fingerprint: "SHA256:abc" }] }, 409));
+    const fp = vi.fn<FetchFn>(async () =>
+      json({ error: "unknown host key", fingerprints: [{ type: "ssh-ed25519", fingerprint: "SHA256:abc" }] }, 409),
+    );
     const err = await caught(createAgentdClient({ invoke: invokeOk(), fetch: fp }).request("/hosts/h/connect"));
     expect(err.fingerprints).toEqual([{ type: "ssh-ed25519", fingerprint: "SHA256:abc" }]);
     const router = vi.fn<FetchFn>(async () =>
-      json({ error: { message: "no model service runs 'x'", code: "model_not_found" } }, 404));
+      json({ error: { message: "no model service runs 'x'", code: "model_not_found" } }, 404),
+    );
     const e2 = await caught(createAgentdClient({ invoke: invokeOk(), fetch: router }).request("/v1/x"));
     expect(e2.message).toBe("no model service runs 'x'");
     expect(e2.code).toBe("model_not_found");

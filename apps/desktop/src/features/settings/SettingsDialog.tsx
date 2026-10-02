@@ -15,7 +15,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       <div className="modal-body settings">
         <div className="mesh-header settings-top">
           <h2 className="h-display">Settings</h2>
-          <div className="subtitle">Everything stays on this Mac. Tokens go to the Keychain and are never shown again.</div>
+          <div className="subtitle">
+            Everything stays on this Mac. Tokens go to the Keychain and are never shown again.
+          </div>
         </div>
         {profile.error && !profile.data ? <ErrorNote error={profile.error} /> : null}
 
@@ -31,7 +33,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       </div>
       <div className="modal-foot">
         <span className="spacer" />
-        <button className="btn primary large" onClick={onClose}>Done</button>
+        <button className="btn primary large" onClick={onClose}>
+          Done
+        </button>
       </div>
     </Modal>
   );

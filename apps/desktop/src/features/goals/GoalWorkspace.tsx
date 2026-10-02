@@ -92,7 +92,9 @@ export function GoalWorkspace({ goalId }: { goalId: string }) {
 
       <div className="stack poll-result">
         {poll.busy ? (
-          <Note icon="search">Looking for new papers on arXiv. Reading each new one with the model can take a while.</Note>
+          <Note icon="search">
+            Looking for new papers on arXiv. Reading each new one with the model can take a while.
+          </Note>
         ) : null}
         {poll.error ? <ErrorNote error={poll.error} /> : null}
         {update.error ? <ErrorNote error={update.error} /> : null}

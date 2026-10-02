@@ -5,7 +5,13 @@ import { Chip, Spinner, StateChip } from "../../components/ui";
 import { StatusMenu } from "./StatusMenu";
 
 /** Mockup 01's header: title, status, Poll now, the options menu and the settings. */
-export function GoalHeader({ goal, polling, updating, onPoll, onStatus }: {
+export function GoalHeader({
+  goal,
+  polling,
+  updating,
+  onPoll,
+  onStatus,
+}: {
   goal: Goal;
   polling: boolean;
   updating: boolean;

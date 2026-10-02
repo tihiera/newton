@@ -71,7 +71,11 @@ export function SummaryTab({ item }: { item: ResearchItem }) {
               <Chip tone={triage.relevant ? "green" : "gray"}>{triage.relevant ? "Relevant" : "Not relevant"}</Chip>
             </div>
             {triage.why ? <p className="pw-body">{triage.why}</p> : null}
-            {triage.model ? <div className="small muted" style={{ marginTop: 8 }}>Model: {triage.model}</div> : null}
+            {triage.model ? (
+              <div className="small muted" style={{ marginTop: 8 }}>
+                Model: {triage.model}
+              </div>
+            ) : null}
           </section>
         ) : null}
 
