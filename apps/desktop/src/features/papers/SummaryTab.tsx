@@ -1,19 +1,16 @@
 import type { ResearchItem } from "../../api";
-import { ExternalLink } from "../../components/ExternalLink";
 import { Icon } from "../../components/Icon";
 import { stateLabel } from "../../components/labels";
-import { when } from "../../components/time";
 import { Chip, ErrorNote, Note, Spinner } from "../../components/ui";
-import { canReadAgain, doiLinks, journalRef, READING_STATES } from "./format";
+import { canReadAgain, READING_STATES } from "./format";
 
-/** The card summary, triage, reading state, abstract and where the text came from. */
+/** The card summary, triage, reading state and abstract (title, authors and source are
+ *  in the header). */
 export function SummaryTab({ item }: { item: ResearchItem }) {
-  const { card, paper, triage, text } = item.data;
+  const { card, paper, triage } = item.data;
   // A paper whose triage failed stays "discovered" with agentd's error: not reading.
   const stuck = item.state === "failed" || canReadAgain(item);
   const reading = READING_STATES.has(item.state) && !stuck;
-  const journal = journalRef(item);
-  const dois = doiLinks(item);
 
   return (
     <div className="pw-grid">
@@ -81,62 +78,6 @@ export function SummaryTab({ item }: { item: ResearchItem }) {
           </section>
         ) : null}
 
-        <section className="card soft">
-          <div className="card-head">
-            <span className="icon-tile lavender">
-              <Icon name="database" />
-            </span>
-            <h3 className="h-card">Source</h3>
-          </div>
-          <div className="pw-prov-grid" style={{ marginTop: 0 }}>
-            <span className="k">arXiv</span>
-            <span className="v">{item.external_id}</span>
-            {journal ? (
-              <>
-                <span className="k">Journal</span>
-                <span className="v">{journal}</span>
-              </>
-            ) : null}
-            {dois.length ? (
-              <>
-                <span className="k">{dois.length > 1 ? "DOIs" : "DOI"}</span>
-                <span className="v">
-                  {dois.map((d, i) => (
-                    <span key={`${i}:${d.doi}`}>
-                      {i ? " " : null}
-                      <ExternalLink href={d.url}>{d.doi}</ExternalLink>
-                    </span>
-                  ))}
-                </span>
-              </>
-            ) : null}
-            {paper?.published ? (
-              <>
-                <span className="k">Published</span>
-                <span className="v">{paper.published.slice(0, 10)}</span>
-              </>
-            ) : null}
-            {paper?.categories?.length ? (
-              <>
-                <span className="k">Categories</span>
-                <span className="v">{paper.categories.join(", ")}</span>
-              </>
-            ) : null}
-            <span className="k">Text</span>
-            <span className="v">
-              {text ? `${text.from.toUpperCase()} · ${text.characters.toLocaleString()} characters` : "not fetched yet"}
-            </span>
-            {item.data.model ? (
-              <>
-                <span className="k">Model</span>
-                <span className="v">{item.data.model}</span>
-              </>
-            ) : null}
-            <span className="k">Added</span>
-            <span className="v">{when(item.created_at)}</span>
-          </div>
-        </section>
-
         {card?.benchmarks?.length ? (
           <section className="card soft">
             <div className="card-head">
@@ -152,18 +93,6 @@ export function SummaryTab({ item }: { item: ResearchItem }) {
                 </Chip>
               ))}
             </div>
-          </section>
-        ) : null}
-
-        {paper?.authors?.length ? (
-          <section className="card soft">
-            <div className="card-head">
-              <span className="icon-tile blush">
-                <Icon name="list" />
-              </span>
-              <h3 className="h-card">Authors</h3>
-            </div>
-            <p className="pw-body">{paper.authors.join(", ")}</p>
           </section>
         ) : null}
       </div>

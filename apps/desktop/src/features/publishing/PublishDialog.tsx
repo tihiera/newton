@@ -26,7 +26,6 @@ import "./publishing.css";
 const CHOICES: Array<{ id: Choice; icon: string; title: string; sub: string }> = [
   { id: "gist", icon: "github", title: "GitHub Gist", sub: "Share a standalone report" },
   { id: "issue", icon: "alert", title: "GitHub Issue", sub: "Post to a repository" },
-  { id: "notion", icon: "notion", title: "Notion page", sub: "Publish below a parent page" },
 ];
 
 export function PublishDialog({

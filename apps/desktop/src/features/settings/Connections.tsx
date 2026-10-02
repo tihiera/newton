@@ -416,7 +416,6 @@ export function ConnectionsSection() {
     <section className="settings-card card connectors">
       {conns.error && !conns.data ? <ErrorNote error={conns.error} /> : null}
       <ConnectorRow target="github" conns={conns.data} refresh={conns.refresh} />
-      <ConnectorRow target="notion" conns={conns.data} refresh={conns.refresh} />
     </section>
   );
 }
