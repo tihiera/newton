@@ -6,8 +6,9 @@
 
 GitHub: a secret gist (report.md), or an issue in a repository. Notion: a page under
 a parent page the user's integration can see. Tokens live in the secret store
-(Keychain); GitHub's can be imported from the GitHub CLI (`gh auth token`, a fixed
-argv) when the user asks.
+(Keychain): from one-click Connect (oauth.py), pasted, or GitHub's imported from the
+GitHub CLI (`gh auth token`, a fixed argv) when the user asks. Notion's OAuth token is
+refreshed before it expires (NotionSession).
 """
 
 from __future__ import annotations
@@ -31,17 +32,17 @@ from ..orchestration.state_machine import record_event
 from ..runners.base import RunnerError
 from ..secrets import SecretStore
 from ..storage.db import Database, Row, dumps, loads, new_id, now
+from .oauth import NOTION_REFRESH, TOKENS, NotionReauth, NotionSession, OAuth
 
 log = logging.getLogger("newton_agentd.publish")
 
 APPROVAL_KIND = "publish_report"
-TOKENS = {"github": "github-token", "notion": "notion-token"}
-GITHUB_API = "https://api.github.com"
-NOTION_API = "https://api.notion.com/v1"
-NOTION_VERSION = "2022-06-28"
 REPO = re.compile(r"[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}")
 NOTION_ID = re.compile(r"[0-9a-fA-F]{32}|[0-9a-fA-F-]{36}")
 ISSUE_LIMIT = 65_000  # GitHub's issue body limit is 65,536 characters
+# Connect asks GitHub for public_repo only: a private repository answers 404.
+PRIVATE_REPO = ("GitHub couldn't find {repo}: Connect reaches public repositories only; "
+                "paste a token with repo access for private ones")  # fmt: skip
 
 
 class PublishError(ValueError):
@@ -60,45 +61,60 @@ class Publisher:
         self.http_factory: Callable[[], httpx.AsyncClient] = lambda: httpx.AsyncClient(
             timeout=httpx.Timeout(60, connect=15)
         )
+        # One-click Connect shares the HTTP factory (tests mock both through it).
+        self.oauth = OAuth(settings, db, secrets, lambda: self.http_factory())
 
     @property
     def dir(self) -> Path:
         return self.settings.data_dir / "publications"
 
     # -- connections ----------------------------------------------------------------------
-    def connections(self) -> dict[str, bool]:
-        return {target: bool(self.secrets.get(ref)) for target, ref in TOKENS.items()}
+    def connections(self) -> dict[str, Any]:
+        """{github, notion: connected?, accounts: who (or null), oauth: Connect set up?}"""
+        connected = {target: bool(self.secrets.get(ref)) for target, ref in TOKENS.items()}
+        accounts = {t: self.oauth.accounts.get(t) if ok else None for t, ok in connected.items()}
+        return {**connected, "accounts": accounts, "oauth": self.oauth.configured()}
 
-    def connect(self, target: str, token: str) -> dict[str, bool]:
+    def connect(self, target: str, token: str, method: str = "token") -> dict[str, Any]:
         if target not in TOKENS:
             raise PublishError(f"unknown target {target}")
         if not re.fullmatch(r"[A-Za-z0-9_\-.]{20,300}", token):
             raise PublishError("that doesn't look like an API token")
-        self.secrets.set(TOKENS[target], token)
+        # Notion: a refresh still waiting for the broker must not write over the paste.
+        with self.oauth.tokens_change(target):
+            self.secrets.set(TOKENS[target], token)
+            if target == "notion":  # a pasted integration token doesn't expire or refresh
+                with contextlib.suppress(Exception):
+                    self.secrets.delete(NOTION_REFRESH)
+            # Who it is stays unknown (""): looking it up would slow the paste down.
+            self.oauth.accounts.save(target, name="", icon=None, method=method)
         return self.connections()
 
-    def disconnect(self, target: str) -> dict[str, bool]:
+    def disconnect(self, target: str) -> dict[str, Any]:
+        """Forget the token (and Notion's refresh token) and who was connected. A GitHub
+        OAuth grant can only be revoked on github.com (that needs the client secret)."""
         if target in TOKENS:
-            with contextlib.suppress(Exception):
-                self.secrets.delete(TOKENS[target])
+            refs = (TOKENS[target], NOTION_REFRESH) if target == "notion" else (TOKENS[target],)
+            # Notion: a refresh still waiting for the broker must not bring the tokens back.
+            with self.oauth.tokens_change(target):
+                for ref in refs:
+                    with contextlib.suppress(Exception):
+                        self.secrets.delete(ref)
+                self.oauth.accounts.delete(target)
         return self.connections()
 
-    def import_gh_token(self) -> dict[str, bool]:
+    def import_gh_token(self) -> dict[str, Any]:
         """The GitHub CLI's token, on the user's request (fixed argv, no shell)."""
         try:
             out = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True,
                                  timeout=15, check=True)  # fmt: skip
         except (OSError, subprocess.SubprocessError) as e:
             raise PublishError(f"the GitHub CLI has no token to give: {e}") from None
-        return self.connect("github", out.stdout.strip())
+        return self.connect("github", out.stdout.strip(), method="gh")
 
     # -- Notion pages (to pick a parent page) -----------------------------------------------
     async def notion_pages(self, query: str = "") -> list[dict[str, Any]]:
         """The pages the user's integration can see, last edited first."""
-        token = await asyncio.to_thread(self.secrets.get, TOKENS["notion"])  # may block
-        if not token:
-            raise Conflict("Notion isn't connected", code="not_connected")
-        headers = {"Authorization": f"Bearer {token}", "Notion-Version": NOTION_VERSION}
         body: dict[str, Any] = {
             "filter": {"property": "object", "value": "page"}, "page_size": 50,
             "sort": {"direction": "descending", "timestamp": "last_edited_time"},
@@ -107,7 +123,12 @@ class Publisher:
             body["query"] = query.strip()
         try:
             async with self.http_factory() as http:
-                resp = await http.post(f"{NOTION_API}/search", headers=headers, json=body)
+                notion = NotionSession(self.oauth, http)
+                if not await notion.open():  # the secret store may block: off the loop
+                    raise Conflict("Notion isn't connected", code="not_connected")
+                resp = await notion.request("POST", f"{self.settings.notion_api}/search", body)
+        except NotionReauth as e:
+            raise Conflict(str(e), code="notion_reauth") from None
         except httpx.HTTPError as e:
             raise RunnerError(_safe(f"Notion couldn't be reached: {e}"), code="notion") from None
         if resp.status_code != 200:
@@ -219,6 +240,7 @@ class Publisher:
         await asyncio.gather(*self._tasks, return_exceptions=True)
 
     async def close(self) -> None:
+        await self.oauth.close()
         for task in list(self._tasks):
             task.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
@@ -236,15 +258,20 @@ class Publisher:
             exp = self.db.query_one("SELECT title FROM experiments WHERE id = ?",
                                     (row["experiment_id"],))  # fmt: skip
             title = f"Newton: {exp['title'] if exp else row['experiment_id']}"[:200]
-            token = self.secrets.get(TOKENS[row["target"]])
-            if not token:
-                raise PublishError(f"not connected to {row['target']} any more")
             destination = loads(row["destination"])
             async with self.http_factory() as http:
                 if row["target"] == "github":
-                    url = await self._github(http, token, destination, title, text)
+                    token = await asyncio.to_thread(self.secrets.get, TOKENS["github"])
+                    if not token:
+                        raise PublishError("not connected to github any more")
+                    account = self.oauth.accounts.get("github")
+                    method = account["method"] if account else None
+                    url = await self._github(http, token, destination, title, text, method)
                 else:
-                    url = await self._notion(http, token, destination, title, text)
+                    notion = NotionSession(self.oauth, http)
+                    if not await notion.open():
+                        raise PublishError("not connected to notion any more")
+                    url = await self._notion(notion, destination, title, text)
             self._set(pub_id, state="published", url=url, error=None)
             record_event(self.db, "publication", pub_id, "published", {"url": url})
         except asyncio.CancelledError:
@@ -254,11 +281,11 @@ class Publisher:
             self._set(pub_id, state="failed", error=_safe(str(e))[:500])
 
     async def _github(self, http: httpx.AsyncClient, token: str, d: dict[str, Any],
-                      title: str, text: str) -> str:  # fmt: skip
+                      title: str, text: str, method: str | None = None) -> str:  # fmt: skip
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
                    "X-GitHub-Api-Version": "2022-11-28"}  # fmt: skip
         if d["kind"] == "gist":
-            resp = await http.post(f"{GITHUB_API}/gists", headers=headers, json={
+            resp = await http.post(f"{self.settings.github_api}/gists", headers=headers, json={
                 "description": title, "public": False,
                 "files": {"newton-report.md": {"content": text}}})  # fmt: skip
         else:
@@ -267,18 +294,20 @@ class Publisher:
                 if len(text) <= ISSUE_LIMIT
                 else (text[: ISSUE_LIMIT - 200] + "\n\n_(truncated: the full report is in Newton)_")
             )
-            resp = await http.post(f"{GITHUB_API}/repos/{d['repo']}/issues", headers=headers,
-                                   json={"title": title, "body": body})  # fmt: skip
+            issues = f"{self.settings.github_api}/repos/{d['repo']}/issues"
+            resp = await http.post(issues, headers=headers, json={"title": title, "body": body})
+            if resp.status_code == 404 and method == "oauth":
+                raise PublishError(PRIVATE_REPO.format(repo=d["repo"]))
         if resp.status_code not in (200, 201):
             raise PublishError(f"GitHub answered {resp.status_code}: {_api_message(resp)}")
         url: str = resp.json()["html_url"]
         return url
 
-    async def _notion(self, http: httpx.AsyncClient, token: str, d: dict[str, Any],
+    async def _notion(self, notion: NotionSession, d: dict[str, Any],
                       title: str, text: str) -> str:  # fmt: skip
-        headers = {"Authorization": f"Bearer {token}", "Notion-Version": NOTION_VERSION}
+        api = self.settings.notion_api
         blocks = notion_blocks(text)
-        resp = await http.post(f"{NOTION_API}/pages", headers=headers, json={
+        resp = await notion.request("POST", f"{api}/pages", {
             "parent": {"page_id": d["parent_page_id"]},
             "properties": {"title": {"title": [{"text": {"content": title}}]}},
             "children": blocks[:100],
@@ -288,8 +317,7 @@ class Publisher:
         page = resp.json()
         for start in range(100, len(blocks), 100):  # Notion takes 100 blocks per request
             batch = {"children": blocks[start : start + 100]}
-            more = await http.patch(f"{NOTION_API}/blocks/{page['id']}/children",
-                                    headers=headers, json=batch)  # fmt: skip
+            more = await notion.request("PATCH", f"{api}/blocks/{page['id']}/children", batch)
             if more.status_code != 200:
                 raise PublishError(f"Notion answered {more.status_code}: {_api_message(more)}")
         url: str = page["url"]

@@ -36,6 +36,7 @@ Every milestone ends with `scripts/test.sh` green and STATUS.md updated.
 | B6 | Publishing | GitHub gist / issue and Notion page, every one approved, exactly the approved text sent, tokens in the Keychain |
 | U1 | Desktop UI | Tauri v2 + React 19 from the user's design: sidebar, paper inbox, research workspace, paper tabs, propose → review → approve → jobs/logs → evidence, publish via approval, compute (host-key trust), models, settings, approvals; no business logic in React; live against agentd on this Mac |
 | U2 | UI gaps closed | journal names, New experiment with scientific memory (409 + retest), Notion page picker, report export (zip), Tauri opener (scoped) and save dialog, keyword errors on their field, papers cut to the reader's context, ESLint + Prettier; live on this Mac |
+| C1 | One-click Connect | GitHub device flow and Notion OAuth (code exchanged and refreshed through a small broker holding the client secret: `services/notion-broker`), accounts shown in Settings, sign-in expiry handled; tokens stay in the Keychain; client IDs to fill in per `docs/connectors-setup.md` |
 
 ## Next
 

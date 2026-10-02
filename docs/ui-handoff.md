@@ -41,7 +41,8 @@ OpenAI-compatible **router**, used for reading papers.
 - **Connection.**
   - The Tauri command `agentd_connection` returns `{base_url, token, data_dir}`, with
     `base_url` defaulting to `http://127.0.0.1:8765`.
-  - Every request carries `Authorization: Bearer <token>`; only `GET /health` is public.
+  - Every request carries `Authorization: Bearer <token>`; only `GET /health` and
+    `GET /connectors/notion/callback` (a browser tab, §5.6) are public.
   - The client maps failures to `token_missing | config | unreachable | unauthorized | http`.
   - Show a clear "agentd isn't running" state for `token_missing` and `unreachable`.
 - **CSP.** `connect-src` allows only Tauri IPC and `http://127.0.0.1:*`. The UI never
@@ -343,20 +344,71 @@ All paths are relative to `base_url`. JSON in and out unless noted.
 
 ### 5.6 Publishing (GitHub, Notion)
 
-- `GET /connectors` returns `{github: bool, notion: bool}`.
-- `PUT /connectors/{github|notion} {token}` stores the token in the Keychain.
+**Connections.** Tokens are write-only (§7); no endpoint returns them.
+
+- `GET /connectors` returns `{github: bool, notion: bool, accounts, oauth}`:
+  - `accounts: {github, notion}`, each `{name, icon, method, connected_at,
+    needs_reauth?}`, or null when not connected or not known (a token stored before
+    accounts were kept): the `github`/`notion` booleans say whether it is connected. `name` is the GitHub login or the Notion
+    workspace name (`""` when unknown, e.g. a pasted token). Show `icon` only when it is
+    an emoji (Notion); never load an image or avatar URL. `method` is `oauth` (Connect),
+    `token` (pasted) or `gh` (GitHub CLI).
+  - `accounts.notion.needs_reauth: true` after Notion refused to renew the sign-in:
+    show "connect Notion again". Cleared by a successful Connect, a paste or a
+    disconnect. Always false or absent for GitHub.
+  - `oauth: {github: bool, notion: bool}`: whether one-click Connect is set up in this
+    build. When false, offer only "paste a token".
+- `PUT /connectors/{github|notion} {token}` stores a pasted token in the Keychain.
   - `POST /connectors/github/import-gh` uses the GitHub CLI's login instead.
-  - `DELETE /connectors/{target}` disconnects.
+  - `DELETE /connectors/{target}` disconnects (forgets the token and who it was).
+- **Connect GitHub (device flow).**
+  - `POST /connectors/github/device` returns `201 {user_code, verification_uri,
+    expires_at, interval}`: show the code and open `verification_uri` in the browser.
+    A new start replaces the last. `409 {code: "not_configured"}` without the app;
+    `409 {code: "cancelled"}` when a DELETE arrived while GitHub was answering;
+    `502` when GitHub can't be reached.
+  - `GET /connectors/github/device` returns `{state, error, user_code,
+    verification_uri, expires_at, account}`; `state` is `none | pending | connected |
+    denied | expired | failed`, `error` the sentence to show, `account` set once
+    connected. Poll while `pending`.
+  - `DELETE /connectors/github/device` cancels and returns the same status (`none`, or
+    `connected` if GitHub had already handed over the token).
+  - Connect files issues in public repositories only (scope `public_repo`). For private
+    ones the user pastes a token with repo access or imports the GitHub CLI login.
+- **Connect Notion (browser sign-in).**
+  - `POST /connectors/notion/authorize` returns `201 {url, expires_at}` (10 minutes):
+    open `url` in the browser. A new start replaces the last. `409 {code:
+    "not_configured"}` without the app.
+  - `GET /connectors/notion/authorize` returns the same status shape as GitHub's
+    (`user_code` is always null). While `pending`, `verification_uri` is the
+    authorize URL, to open it again.
+  - `DELETE /connectors/notion/authorize` cancels a pending sign-in (a later callback
+    gets the "link expired" page) and returns the status: `none`, or `connected` if the
+    callback had already finished.
+  - `GET /connectors/notion/callback` is public and not for the UI: Notion sends the
+    browser there, and agentd answers with a small HTML page. The UI sees the result by
+    polling the status above.
+- **Notion pages.** `GET /connectors/notion/pages?query=` lists the pages the Notion
+  integration can write under: `[{id (32 hex), title, url, icon (emoji or null)}]`,
+  last edited first.
+  - `409 {code: "not_connected"}` without a token.
+  - `409 {code: "notion_reauth"}` "Notion's sign-in expired: connect Notion again" when
+    Notion refused to renew the sign-in (`needs_reauth` is then true).
+  - `502` with Notion's own message, or "Notion couldn't be reached to renew the
+    sign-in: try again in a moment" when the renewal failed for a passing reason
+    (`needs_reauth` unchanged).
+
+**Publishing stays approval-gated:** connecting sends nothing.
+
 - **`POST /experiments/{id}/publish {target, destination}`** returns a publication
-  awaiting approval. `destination` is one of:
+  awaiting approval; nothing is sent until it is approved. `destination` is one of:
   - `github` gist: `{}`
   - `github` issue: `{kind: "issue", repo: "owner/name"}`
   - `notion`: `{parent_page_id: "<32 hex>"}`
-- `GET /connectors/notion/pages?query=` lists the pages the Notion integration can
-  write under: `[{id (32 hex), title, url, icon (emoji or null)}]`, last edited first;
-  `409 {code: "not_connected"}` without a token, `502` with Notion's own message.
 - `GET /publications?experiment_id=` returns
   `[{id, target, destination, state, url, error, content_sha256, created_at}]`.
+  Show `error` as is, e.g. "GitHub couldn't find owner/name: Connect reaches public
+  repositories only; paste a token with repo access for private ones".
 
 ### 5.7 System
 

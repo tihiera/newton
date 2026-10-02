@@ -24,5 +24,10 @@ if [ -d apps/desktop/node_modules ] && command -v pnpm >/dev/null 2>&1; then
     (cd apps/desktop/src-tauri && cargo test -q)
   fi
 fi
+# Notion OAuth broker (services/notion-broker): dependency-free, needs only node.
+if command -v node >/dev/null 2>&1; then
+  echo "==> notion-broker (node --test)"
+  (cd services/notion-broker && node --test)
+fi
 echo "==> pytest (parallel on all cores; pass -n 0 for a serial run)"
 uv run pytest -p no:warnings -n auto "$@"

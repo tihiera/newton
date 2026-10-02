@@ -8,6 +8,13 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .connectors.oauth_apps import (
+    GITHUB_CLIENT_ID,
+    NOTION_BROKER_URL,
+    NOTION_CLIENT_ID,
+    NOTION_REDIRECT_URI,
+)
+
 
 def _default_data_dir() -> Path:
     if sys.platform == "darwin":
@@ -78,8 +85,40 @@ class Settings:
     router_log_rows: int = field(
         default_factory=lambda: int(os.environ.get("NEWTON_ROUTER_LOG_ROWS", "200000"))
     )
+    # One-click Connect (connectors/oauth_apps.py has the defaults: public values only).
+    github_client_id: str = field(
+        default_factory=lambda: os.environ.get("NEWTON_GITHUB_CLIENT_ID", GITHUB_CLIENT_ID)
+    )
+    notion_client_id: str = field(
+        default_factory=lambda: os.environ.get("NEWTON_NOTION_CLIENT_ID", NOTION_CLIENT_ID)
+    )
+    notion_broker_url: str = field(
+        default_factory=lambda: os.environ.get("NEWTON_NOTION_BROKER_URL", NOTION_BROKER_URL)
+    )
+    # Notion matches redirect URIs exactly (oauth_apps.NOTION_REDIRECT_URI is the one
+    # registered with the integration); empty: notion_callback_url's default, on
+    # 127.0.0.1 (the address agentd binds), never "localhost": that may resolve to ::1
+    # first, where another local process could listen on the same port and take the code.
+    notion_redirect_uri: str = field(
+        default_factory=lambda: os.environ.get("NEWTON_NOTION_REDIRECT_URI", NOTION_REDIRECT_URI)
+    )
+    # Base URLs, overridden only for local end-to-end tests.
+    github_web: str = field(
+        default_factory=lambda: os.environ.get("NEWTON_GITHUB_WEB", "https://github.com")
+    )
+    github_api: str = field(
+        default_factory=lambda: os.environ.get("NEWTON_GITHUB_API", "https://api.github.com")
+    )
+    notion_api: str = field(
+        default_factory=lambda: os.environ.get("NEWTON_NOTION_API", "https://api.notion.com/v1")
+    )
     start_scheduler: bool = True
     max_submit_attempts: int = 3
+
+    @property
+    def notion_callback_url(self) -> str:
+        return (self.notion_redirect_uri
+                or f"http://127.0.0.1:{self.port}/connectors/notion/callback")  # fmt: skip
 
     @property
     def db_path(self) -> Path:

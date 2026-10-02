@@ -158,13 +158,21 @@ def test_a_refusal_is_reported_without_the_token(client: TestClient) -> None:
     assert done["state"] == "failed" and "401" in done["error"] and TOKEN not in done["error"]
 
 
+def connected(body: dict[str, Any]) -> tuple[bool, bool]:
+    return body["github"], body["notion"]
+
+
 def test_connectors(client: TestClient) -> None:
-    assert client.get("/connectors").json() == {"github": False, "notion": False}
+    # The two booleans; accounts and the one-click Connect flags are in test_connect_oauth.
+    assert connected(client.get("/connectors").json()) == (False, False)
     assert client.put("/connectors/github", json={"token": "short"}).status_code == 422
     assert client.put("/connectors/notion", json={"token": "x" * 20 + "; rm"}).status_code == 400
     client.put("/connectors/notion", json={"token": NOTION})
-    assert client.get("/connectors").json() == {"github": False, "notion": True}
-    assert client.delete("/connectors/notion").json() == {"github": False, "notion": False}
+    body = client.get("/connectors").json()
+    assert connected(body) == (False, True)
+    assert body["accounts"]["notion"]["method"] == "token" and body["accounts"]["github"] is None
+    assert connected(client.delete("/connectors/notion").json()) == (False, False)
+    assert client.get("/connectors").json()["accounts"]["notion"] is None
 
 
 def test_markdown_to_notion_blocks() -> None:

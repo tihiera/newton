@@ -29,6 +29,8 @@ from .serving.manager import ServiceNotFound, ServiceRefused
 from .serving.router import RouterError
 
 PUBLIC_PATHS = {"/health"}
+# GET only, no bearer: the browser coming back from Notion's consent page (still loopback).
+PUBLIC_GET_PATHS = {"/connectors/notion/callback"}
 ALLOWED_HOSTNAMES = {"127.0.0.1", "localhost", "testserver"}
 # Origins of the Tauri webview (macOS) and the Vite dev server.
 UI_ORIGINS = ["tauri://localhost", "http://tauri.localhost", "http://localhost:1420"]
@@ -61,7 +63,8 @@ class Guard:
                 RouterError(403, "forbidden host", "invalid_request_error", "forbidden_host")
                 .response() if v1 else JSONResponse({"error": "forbidden host"}, status_code=403)
             )  # fmt: skip
-        elif scope["method"] != "OPTIONS" and path not in PUBLIC_PATHS:
+        elif (scope["method"] != "OPTIONS" and path not in PUBLIC_PATHS
+              and not (scope["method"] == "GET" and path in PUBLIC_GET_PATHS)):  # fmt: skip
             scheme, _, token = headers.get("authorization", "").partition(" ")
             given = token.encode("latin-1")  # bytes: any header value compares safely
             bearer = scheme.lower() == "bearer"

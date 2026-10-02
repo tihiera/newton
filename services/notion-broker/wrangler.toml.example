@@ -1,0 +1,16 @@
+# Copy to wrangler.toml (not committed) and deploy with `wrangler deploy`.
+# The client id and secret are NOT set here: use `wrangler secret put` (see README.md).
+name = "newton-notion-broker"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+# Keep Workers Logs off: the broker logs nothing itself, and the platform shouldn't either.
+[observability]
+enabled = false
+
+[vars]
+# Comma-separated, matched exactly. Must equal the redirect URI registered on the
+# Notion integration and the one agentd sends: NOTION_REDIRECT_URI in
+# services/agentd/newton_agentd/connectors/oauth_apps.py, or the env var
+# NEWTON_NOTION_REDIRECT_URI (default http://127.0.0.1:8765/connectors/notion/callback).
+ALLOWED_REDIRECT_URIS = "http://127.0.0.1:8765/connectors/notion/callback"

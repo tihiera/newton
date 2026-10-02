@@ -1,0 +1,9 @@
+{
+  "name": "newton-notion-broker",
+  "private": true,
+  "type": "module",
+  "description": "Newton's Notion OAuth token broker (Cloudflare Worker). No dependencies.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

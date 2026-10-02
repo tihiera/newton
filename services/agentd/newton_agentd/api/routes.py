@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Query, Request, Response
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from .. import __version__
+from ..connectors.oauth import PAGE_HEADERS, callback_page
 from ..connectors.publish import PublishError
 from ..context import AppContext
 from ..contracts import (
@@ -683,13 +684,16 @@ class PublishRequest(BaseModel):
 
 
 @router.get("/connectors")
-async def connectors(request: Request) -> dict[str, bool]:
+async def connectors(request: Request) -> dict[str, Any]:
+    """{github, notion: connected?, accounts: {github, notion: who (name, icon, method,
+    connected_at, needs_reauth: Notion rejected a refresh, connect again), or null},
+    oauth: {github, notion: is one-click Connect set up in this build?}}"""
     return ctx_of(request).publisher.connections()
 
 
 @router.put("/connectors/{target}")
 async def connect(request: Request, target: Literal["github", "notion"],
-                  body: Connect) -> dict[str, bool]:  # fmt: skip
+                  body: Connect) -> dict[str, Any]:  # fmt: skip
     """Store the target's API token in the secret store (never in the database)."""
     try:
         return ctx_of(request).publisher.connect(target, body.token)
@@ -698,7 +702,7 @@ async def connect(request: Request, target: Literal["github", "notion"],
 
 
 @router.post("/connectors/github/import-gh")
-async def import_gh(request: Request) -> dict[str, bool]:
+async def import_gh(request: Request) -> dict[str, Any]:
     """Use the GitHub CLI's token (asked for explicitly: `gh auth token`)."""
     try:
         return await asyncio.to_thread(ctx_of(request).publisher.import_gh_token)
@@ -715,8 +719,64 @@ async def notion_pages(
     return await ctx_of(request).publisher.notion_pages(query)
 
 
+@router.post("/connectors/github/device", status_code=201)
+async def github_device(request: Request) -> dict[str, Any]:
+    """Start GitHub's device flow: show user_code, open verification_uri; agentd polls
+    GitHub in the background (GET for how it goes). A new one replaces the last.
+    409 not_configured when this build has no GitHub OAuth App; 409 cancelled when a
+    DELETE arrived while GitHub was answering (nothing was started)."""
+    return await ctx_of(request).publisher.oauth.github_start()
+
+
+@router.get("/connectors/github/device")
+async def github_device_status(request: Request) -> dict[str, Any]:
+    """{state: none|pending|connected|denied|expired|failed, error, user_code,
+    verification_uri, expires_at, account}"""
+    return ctx_of(request).publisher.oauth.github_status()
+
+
+@router.delete("/connectors/github/device")
+async def github_device_cancel(request: Request) -> dict[str, Any]:
+    return await ctx_of(request).publisher.oauth.github_cancel()
+
+
+@router.post("/connectors/notion/authorize", status_code=201)
+async def notion_authorize(request: Request) -> dict[str, Any]:
+    """Notion's consent page to open in the browser ({url, expires_at}); Notion sends the
+    browser back to /connectors/notion/callback. 409 not_configured without the app."""
+    return ctx_of(request).publisher.oauth.notion_start()
+
+
+@router.get("/connectors/notion/authorize")
+async def notion_authorize_status(request: Request) -> dict[str, Any]:
+    """{state: none|pending|connected|denied|expired|failed, error, verification_uri (the
+    authorize URL while pending, to reopen it), expires_at, account}"""
+    return ctx_of(request).publisher.oauth.notion_status()
+
+
+@router.delete("/connectors/notion/authorize")
+async def notion_authorize_cancel(request: Request) -> dict[str, Any]:
+    """Cancel a pending Notion sign-in: a later callback with its state gets the expired
+    page. The status after it: state none, or connected when the callback had finished."""
+    return await ctx_of(request).publisher.oauth.notion_cancel()
+
+
+@router.get("/connectors/notion/callback", response_class=HTMLResponse)
+async def notion_callback(
+    request: Request,
+    code: str | None = Query(None, max_length=2048),
+    state: str | None = Query(None, max_length=512),
+    error: str | None = Query(None, max_length=512),
+) -> HTMLResponse:
+    """Where Notion sends the browser back (no bearer: a browser tab; loopback only).
+    A small page says how it went; the tokens stay in agentd."""
+    status, sentence = await ctx_of(request).publisher.oauth.notion_callback(code, state, error)
+    return HTMLResponse(callback_page(sentence), status_code=status, headers=PAGE_HEADERS)
+
+
 @router.delete("/connectors/{target}")
-async def disconnect(request: Request, target: str) -> dict[str, bool]:
+async def disconnect(request: Request, target: str) -> dict[str, Any]:
+    """Forget the token, Notion's refresh token and who was connected."""
     return ctx_of(request).publisher.disconnect(target)
 
 
