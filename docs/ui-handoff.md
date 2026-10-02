@@ -335,6 +335,10 @@ All paths are relative to `base_url`. JSON in and out unless noted.
     offer "Propose anyway", which sends `retest: true`.
   - A rejected, cancelled or failed experiment puts its paper back to `carded` (or
     `reported` when it was tested before).
+- **Keywords from the topic.** `POST /goals` with no keywords fills them in (the reader
+  model's proposal, else the text's own terms; event `keywords {keywords, source}`), and a
+  poll of a goal without keywords does the same first. `POST /goals/suggest-keywords
+  {title, description}` returns `{keywords, source: "model" | "text"}` for the dialog.
 - **`GET /findings?goal_id=`** is the scientific memory:
   - `[{experiment_id, research_item_id, scheme_name, evidence,
     claims: [{claim, claimed, holds}], summary, created_at}]`

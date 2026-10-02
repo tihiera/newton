@@ -55,6 +55,9 @@ export function createApi(c: AgentdClient = agentd) {
       list: (signal?: AbortSignal) => get<Goal[]>("/goals", undefined, signal),
       get: (id: string) => get<Goal>(`/goals/${id}`),
       create: (body: GoalCreate) => post<Goal>("/goals", body),
+      /** Search keywords for a topic: the reader model's, else the text's own terms. */
+      suggestKeywords: (body: { title: string; description?: string }) =>
+        post<{ keywords: string[]; source: "model" | "text" }>("/goals/suggest-keywords", body),
       update: (id: string, body: Partial<GoalCreate> & { status?: GoalStatus }) =>
         c.request<Goal>(`/goals/${id}`, { method: "PATCH", body }),
       poll: (id: string) => post<PollSummary>(`/goals/${id}/poll`),

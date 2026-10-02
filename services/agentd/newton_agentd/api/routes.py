@@ -33,6 +33,7 @@ from ..orchestration import jobs as jobs_mod
 from ..orchestration.state_machine import record_event
 from ..readiness import readiness as readiness_view
 from ..reporting.export import export as export_report
+from ..research import keywords as keywords_mod
 from ..research import library as library_mod
 from ..research import schemes as schemes_mod
 from ..research.experiment_design import BENCHMARKS
@@ -316,9 +317,31 @@ async def list_goals(request: Request) -> list[dict[str, Any]]:
     return [_goal_view(r) for r in rows]
 
 
+class KeywordsRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=10_000)
+
+
+@router.post("/goals/suggest-keywords")
+async def suggest_goal_keywords(request: Request, body: KeywordsRequest) -> dict[str, Any]:
+    """Search keywords for a topic: the reader model's, else the text's own terms."""
+    ctx = ctx_of(request)
+    found, source = await keywords_mod.suggest(
+        ctx.router, ctx.profile.get()["default_model"], body.title, body.description
+    )
+    return {"keywords": found, "source": source}
+
+
 @router.post("/goals", status_code=201)
 async def create_goal(request: Request, body: GoalCreate) -> dict[str, Any]:
-    db = ctx_of(request).db
+    ctx = ctx_of(request)
+    db = ctx.db
+    suggested: str | None = None
+    if not body.keywords:  # none given: Newton proposes them from the topic
+        found, suggested = await keywords_mod.suggest(
+            ctx.router, ctx.profile.get()["default_model"], body.title, body.description
+        )
+        body = body.model_copy(update={"keywords": found})
     goal_id = new_id("goal")
     t = now()
     with db.tx():
@@ -337,6 +360,9 @@ async def create_goal(request: Request, body: GoalCreate) -> dict[str, Any]:
             },
         )
         record_event(db, "goal", goal_id, "created", {"title": body.title})
+        if suggested:
+            record_event(db, "goal", goal_id, "keywords",
+                         {"keywords": body.keywords, "source": suggested})  # fmt: skip
     return await get_goal(request, goal_id)
 
 

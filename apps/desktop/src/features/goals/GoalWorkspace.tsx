@@ -96,7 +96,7 @@ export function GoalWorkspace({ goalId }: { goalId: string }) {
             Looking for new papers on arXiv. Reading each new one with the model can take a while.
           </Note>
         ) : null}
-        {poll.error ? <ErrorNote error={poll.error} /> : null}
+        {poll.error && poll.error.message !== goal.last_poll_error ? <ErrorNote error={poll.error} /> : null}
         {update.error ? <ErrorNote error={update.error} /> : null}
         {lastPoll ? (
           <section className="card mesh-card">

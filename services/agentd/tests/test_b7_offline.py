@@ -405,7 +405,7 @@ def test_notion_offline_and_errors_are_never_empty(client: TestClient) -> None:
 
 def test_a_goal_without_keywords_backs_off_and_never_blocks_the_others(lab: TestClient) -> None:
     ctx = ctx_of(lab)
-    r = lab.post("/goals", json={"title": "Nothing to look for"})  # keywords: []
+    r = lab.post("/goals", json={"title": "It is what it is"})  # keywords: []
     assert r.status_code == 201, r.text
     empty = r.json()["id"]
     valid = goal(lab)
@@ -499,7 +499,7 @@ def test_without_a_model_a_poll_is_a_failure_and_the_goal_polls_once_one_is_set(
 
 def test_editing_or_resuming_a_goal_clears_its_poll_error_and_backoff(lab: TestClient) -> None:
     ctx = ctx_of(lab)
-    empty = lab.post("/goals", json={"title": "Nothing to look for"}).json()["id"]
+    empty = lab.post("/goals", json={"title": "It is what it is"}).json()["id"]
     lab.portal.call(ctx.loop.poll_due)  # type: ignore[union-attr]
     for _ in range(3):  # backed off further and further
         ctx.db.execute("UPDATE goals SET next_poll_at = ? WHERE id = ?", (now() - 1, empty))

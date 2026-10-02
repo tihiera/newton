@@ -18,6 +18,11 @@ export function NewResearchDialog({ onClose }: { onClose: () => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [keywords, setKeywords] = useState("");
+  // Keywords proposed from the topic (the reader model, else the text's own terms).
+  const suggest = useAction(async () => {
+    const out = await api.goals.suggestKeywords({ title: title.trim(), description: description.trim() });
+    if (out.keywords.length) setKeywords(out.keywords.join(", "));
+  });
   const [advanced, setAdvanced] = useState(false);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [pollHours, setPollHours] = useState("24");
@@ -97,13 +102,29 @@ export function NewResearchDialog({ onClose }: { onClose: () => void }) {
             />
           </Field>
 
-          <Field label="Keywords" error={le("keywords")} hint="Comma separated, e.g. flux limiter, TVD scheme">
-            <input
-              className={`input ${le("keywords") ? "invalid" : ""}`}
-              value={keywords}
-              onChange={(e) => setKeywords(e.target.value)}
-              placeholder="flux limiter, TVD scheme"
-            />
+          <Field
+            label="Keywords"
+            error={le("keywords") ?? (suggest.error ? suggest.error.message : undefined)}
+            hint="Comma separated. Leave empty and Newton picks them from the title and description."
+          >
+            <div className="row" style={{ flexWrap: "nowrap", gap: 8 }}>
+              <input
+                className={`input ${le("keywords") ? "invalid" : ""}`}
+                value={keywords}
+                onChange={(e) => setKeywords(e.target.value)}
+                placeholder="flux limiter, TVD scheme"
+              />
+              <button
+                type="button"
+                className="btn"
+                disabled={!title.trim() || suggest.busy}
+                onClick={() => void suggest.run()}
+                title="Propose keywords from the title and description"
+              >
+                {suggest.busy ? <Spinner /> : <Icon name="sparkle" size={16} />}
+                Suggest
+              </button>
+            </div>
           </Field>
 
           <div>

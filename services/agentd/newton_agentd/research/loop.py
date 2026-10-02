@@ -45,6 +45,7 @@ from ..network import NetworkState
 from ..orchestration.state_machine import RESEARCH_ITEM, ConcurrentTransition, record_event
 from ..runners.base import RunnerError
 from ..storage.db import Database, dumps, loads, new_id, now
+from . import keywords as keywords_mod
 from .papers import ARXIV_API, ArxivUnreachable, PaperError, Papers, parse_feed, proposal
 
 log = logging.getLogger("newton_agentd.loop")
@@ -243,6 +244,16 @@ class ResearchLoop:
                 self._failed(goal_id, NO_MODEL, "model")
                 summary["error"] = NO_MODEL
                 return summary
+            if not loads(goal["keywords"]):  # none yet: proposed from the topic, then saved
+                found_kw, source = await keywords_mod.suggest(
+                    self.router, model, goal["title"], goal["description"] or ""
+                )
+                if found_kw:
+                    self.db.execute("UPDATE goals SET keywords = ?, updated_at = ? WHERE id = ?",
+                                    (dumps(found_kw), now(), goal_id))  # fmt: skip
+                    record_event(self.db, "goal", goal_id, "keywords",
+                                 {"keywords": found_kw, "source": source})  # fmt: skip
+                    goal = {**goal, "keywords": dumps(found_kw)}
             try:
                 query = search_query(loads(goal["keywords"]), loads(goal["categories"]))
             except PaperError as e:  # the goal itself can't be searched: say so, back off
