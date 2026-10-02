@@ -12,6 +12,25 @@ export const ENDED_SERVICE = new Set(["stopped", "failed", "lost", "rejected", "
 
 type Panel = "stop" | "logs" | null;
 
+const gb = (n: number) => `${(n / 1024 ** 3).toFixed(1)} GB`;
+
+/** "Downloading 42% · 1.1 of 2.5 GB", with a bar. */
+function DownloadBar({ progress }: { progress: NonNullable<Service["progress"]> }) {
+  const { completed, total } = progress;
+  const pct = total ? Math.min(100, Math.round((completed / total) * 100)) : null;
+  return (
+    <div className="download">
+      <div className="small muted">
+        Downloading{pct !== null ? ` ${pct}%` : ""} · {gb(completed)}
+        {total ? ` of ${gb(total)}` : ""}
+      </div>
+      <div className="download-track">
+        <div className={`download-fill ${pct === null ? "unknown" : ""}`} style={{ width: `${pct ?? 30}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function ServiceCard({
   service,
   hosts,
@@ -54,6 +73,7 @@ export function ServiceCard({
         </button>
       </div>
 
+      {service.progress ? <DownloadBar progress={service.progress} /> : null}
       {service.error ? <ErrorNote error={service.error} /> : null}
       {stop.error ? <ErrorNote error={stop.error} /> : null}
 

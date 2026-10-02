@@ -463,6 +463,8 @@ export interface Service {
   ready_at: Timestamp | null;
   endpoint: { base_url: string; auth: "bearer" | "none"; reachable: boolean | null } | null;
   auth_note?: string;
+  /** While the model downloads: bytes so far and the total (null when unknown). */
+  progress?: { phase: string; completed: number; total: number | null } | null;
   created_at: Timestamp;
 }
 

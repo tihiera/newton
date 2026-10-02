@@ -145,3 +145,30 @@ def test_an_error_in_a_successful_answer_is_reported(
     servers.append(api)
     with pytest.raises(RuntimeError, match="ollama couldn't pull llama3.2:3b: disk full"):
         supervisor(tmp_path, api, stored=False).prepare(time.time() + 30)
+
+
+def test_a_pull_reports_its_progress(tmp_path: Path, servers: list[OfflineOllama]) -> None:
+    lines = [
+        {"status": "pulling manifest"},
+        {"status": "pulling a", "digest": "sha256:a", "total": 1000, "completed": 250},
+        {"status": "pulling b", "digest": "sha256:b", "total": 3000, "completed": 0},
+        {"status": "pulling a", "digest": "sha256:a", "total": 1000, "completed": 1000},
+        {"status": "success"},
+    ]
+    body = b"".join(json.dumps(line).encode() + b"\n" for line in lines)
+    api = OfflineOllama(digest=None, pull_status=200, pull_body=body)
+    servers.append(api)
+    sup = supervisor(tmp_path, api, stored=False)
+    seen: list[object] = []
+    update = sup.update
+
+    def record(**fields: object) -> None:
+        if "progress" in fields:
+            seen.append(fields["progress"])
+        update(**fields)
+
+    sup.update = record  # type: ignore[method-assign]
+    sup.pull(time.time() + 30)
+    assert seen[0] == {"phase": "downloading", "completed": 250, "total": 1000}  # first step
+    assert seen[-1] is None  # cleared once the pull is over
+    assert json.loads((sup.dir / "status.json").read_text()).get("progress") is None

@@ -130,6 +130,7 @@ class ServiceManager:
         self._last_probe: dict[str, float] = {}
         self._connect_failures: dict[str, int] = {}
         self._reachable: dict[str, bool] = {}
+        self._progress: dict[str, dict[str, Any]] = {}  # service_id -> download progress
         self._forward_denied: set[str] = set()
         self._tasks: set[asyncio.Task[None]] = set()
         self._busy: set[str] = set()
@@ -151,8 +152,24 @@ class ServiceManager:
             raise ServiceNotFound(service_id)
         return row
 
+    def _progress_from(self, service_id: str, raw: Any) -> None:
+        """The worker's download progress ({phase, completed, total} bytes), kept in
+        memory only: it matters while it lasts."""
+        ok = isinstance(raw, dict) and isinstance(raw.get("completed"), int)
+        if ok:
+            total = raw.get("total")
+            self._progress[service_id] = {
+                "phase": str(raw.get("phase") or "downloading")[:20],
+                "completed": int(raw["completed"]),
+                "total": int(total) if isinstance(total, int) and total > 0 else None,
+            }
+        else:
+            self._progress.pop(service_id, None)
+
     def view(self, row: Row) -> dict[str, Any]:
         out = dict(row)
+        ended = row["state"] in SERVICE.terminal
+        out["progress"] = None if ended else self._progress.get(row["id"])  # a download
         out["spec"] = loads(row["spec"])
         out["healthy"] = None if row["healthy"] is None else bool(row["healthy"])
         for private in ("api_key_ref", "forward_pid", "forward_control"):
@@ -521,6 +538,7 @@ class ServiceManager:
                 await self._probe(row, force=True)
             return False
         self.hosts.note_reachability(row["host_id"], None)
+        self._progress_from(row["id"], remote.get("progress"))
         ours: str = FROM_WORKER.get(str(remote.get("state"))) or str(row["state"])
         fields: dict[str, Any] = {
             "remote_state": remote.get("state"),

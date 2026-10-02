@@ -7,7 +7,12 @@ import { useAction } from "../../hooks/useAction";
 import { Icon } from "../../components/Icon";
 import { Chip, ErrorNote, fieldError, Spinner } from "../../components/ui";
 import { DefaultModelPicker } from "./DefaultModelPicker";
-import { readerLine } from "./readerView";
+import { readerLine, sameModel } from "./readerView";
+
+/** Some running service serves this model (the router can reach it now). */
+function runs(router: RouterStatus | undefined, model: string): boolean {
+  return Boolean(router?.models.some((m) => sameModel(m.id, model) && m.newton.services.some((s) => s.routable)));
+}
 
 export function ReaderModel({
   profile,
@@ -84,9 +89,12 @@ export function ReaderModel({
               className="btn primary"
               disabled={save.busy}
               onClick={async () => {
-                if (await save.run(model.trim())) {
+                const chosen = model.trim();
+                if (await save.run(chosen)) {
                   setEditing(false);
                   onSaved();
+                  // Not running anywhere: papers can't be read with it until it is.
+                  if (chosen && !runs(router, chosen)) onStart(chosen);
                 }
               }}
             >

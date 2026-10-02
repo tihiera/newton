@@ -44,6 +44,7 @@ from ..errors import Conflict, NotFound
 from ..network import NetworkState
 from ..orchestration.state_machine import RESEARCH_ITEM, ConcurrentTransition, record_event
 from ..runners.base import RunnerError
+from ..serving.router import RouterError
 from ..storage.db import Database, dumps, loads, new_id, now
 from . import keywords as keywords_mod
 from .papers import ARXIV_API, ArxivUnreachable, PaperError, Papers, parse_feed, proposal
@@ -58,6 +59,7 @@ OFFLINE = ("arXiv couldn't be reached (offline?): Newton will look again when th
            "is back")  # fmt: skip
 NO_MODEL = "no model: set default_model in the profile"
 NO_KEYWORDS = "the goal has no keywords to search for: add some so Newton can look for papers"
+READER_DOWN = "the reader model isn't running"  # + why: start it in Models, or choose another
 TRIAGE = """You triage new papers for a research assistant that tests numerical methods on a
 linear advection benchmark (1D/2D, periodic, finite volume). The user's goal:
 
@@ -80,6 +82,8 @@ def failure_code(sentence: str | None) -> str | None:
     """The code of the failure a goal's last_poll_error says (None: no failure)."""
     if not sentence:
         return None
+    if sentence.startswith(READER_DOWN):
+        return "model"
     return {NO_MODEL: "model", NO_KEYWORDS: "goal", OFFLINE: "offline"}.get(sentence, "arxiv")
 
 
@@ -160,9 +164,12 @@ class ResearchLoop:
             due += [dict(g) for g in failed if all(d["id"] != g["id"] for d in due)]
         # Without a model a poll searches nothing: it isn't waiting for the network.
         searches = bool(self.profile.get()["default_model"])
-        if searches:  # a model was chosen since: goals that waited for one look now
-            waited = self.db.query("SELECT * FROM goals WHERE status = 'active' "
-                                   "AND last_poll_error = ?", (NO_MODEL,))  # fmt: skip
+        model = self.profile.get()["default_model"]
+        if searches and not self._reader_down(model):  # a reader runs now: those that
+            waited = self.db.query(                    # waited for one look at once
+                "SELECT * FROM goals WHERE status = 'active' AND (last_poll_error = ? "
+                "OR last_poll_error LIKE ?)", (NO_MODEL, READER_DOWN + "%"),
+            )  # fmt: skip
             due += [dict(g) for g in waited if all(d["id"] != g["id"] for d in due)]
         for goal in due:
             if searches and self.network.is_offline():  # learned this pass: the rest wait
@@ -244,6 +251,11 @@ class ResearchLoop:
                 self._failed(goal_id, NO_MODEL, "model")
                 summary["error"] = NO_MODEL
                 return summary
+            down = self._reader_down(model)
+            if down:  # nothing to read papers with: don't start papers it can't read
+                self._failed(goal_id, down, "model")
+                summary["error"] = down
+                return summary
             if not loads(goal["keywords"]):  # none yet: proposed from the topic, then saved
                 found_kw, source = await keywords_mod.suggest(
                     self.router, model, goal["title"], goal["description"] or ""
@@ -280,6 +292,18 @@ class ResearchLoop:
                 "SELECT 1 FROM research_items WHERE source = 'arxiv' AND external_id = ?",
                 (p["arxiv_id"],))][:MAX_NEW]  # fmt: skip
             summary["new"] = len(fresh)
+            # Papers left unread while no reader ran: read them now.
+            stuck = self.db.query(
+                "SELECT id, data FROM research_items WHERE goal_id = ? AND state = 'discovered' "
+                "AND json_extract(data, '$.error') LIKE 'triage:%' ORDER BY created_at LIMIT ?",
+                (goal_id, MAX_NEW),
+            )  # fmt: skip
+            summary["retried"] = len(stuck)
+            for row in stuck:
+                paper = (loads(row["data"]) or {}).get("paper")
+                if isinstance(paper, dict) and paper.get("arxiv_id"):
+                    self.papers._update(row["id"], error=None, model=model)
+                    await self._read(goal, row["id"], paper, model, summary)
             for paper in fresh:
                 await self._one(goal, paper, model, summary)
             record_event(self.db, "goal", goal_id, "poll", summary)
@@ -308,6 +332,19 @@ class ResearchLoop:
             "data": dumps({"paper": paper, "model": model, "found_by": "research_loop"}),
             "created_at": t, "updated_at": t,
         })  # fmt: skip
+        await self._read(goal, item_id, paper, model, summary)
+
+    def _reader_down(self, model: str) -> str | None:
+        """Why the reader can't read papers now (no service runs it), or None."""
+        try:
+            self.router.resolve(model)
+        except RouterError as e:
+            return f"{READER_DOWN} ({e}): start it in Models, or choose a model that runs"
+        return None
+
+    async def _read(self, goal: Any, item_id: str, paper: dict[str, Any], model: str,
+                    summary: dict[str, Any]) -> None:  # fmt: skip
+        """Triage a discovered paper, then card it and propose (relevant ones)."""
         try:
             relevant, why = await self.triage(goal, paper, model)
         except Exception as e:  # can't triage now: leave it discovered, say why

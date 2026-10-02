@@ -56,6 +56,8 @@ def lab(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(loop_mod, "ARXIV_SPACING", 0.0)
     ctx_of(client).papers.retry_delay = 0.0
     client.patch("/profile", json={"default_model": "fake/unserved"})  # a poll needs a model
+    # These tests are about arXiv and the network: the reader counts as running.
+    monkeypatch.setattr(ctx_of(client).loop, "_reader_down", lambda model: None)
     return client
 
 

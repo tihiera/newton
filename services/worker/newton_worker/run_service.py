@@ -64,6 +64,21 @@ def _on_sigterm(*_: Any) -> None:
         raise Stop
 
 
+def dir_bytes(path: Path) -> int:
+    """Bytes in the files under `path` (0 when it isn't there yet)."""
+    total = 0
+    try:
+        for p in path.rglob("*"):
+            try:
+                if p.is_file():
+                    total += p.stat().st_size
+            except OSError:
+                continue
+    except OSError:
+        return 0
+    return total
+
+
 class Supervisor:
     def __init__(self, service_dir: Path) -> None:
         self.dir = service_dir
@@ -217,17 +232,23 @@ class Supervisor:
                         supervisor_pid=os.getpid())  # fmt: skip
         finally:
             signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM})
+        blobs = snapshot.parent.parent / "blobs"  # where the download's bytes land
+        shown = 0.0
         try:
             while fetch.poll() is None:
                 self.check_stop()
                 self.check_gate()
                 if time.time() > deadline:
                     raise RuntimeError("the model download did not finish in time")
+                if time.time() - shown >= 1.0:
+                    shown = time.time()
+                    self.update(progress={"phase": "downloading", "completed": dir_bytes(blobs),
+                                          "total": listed})  # fmt: skip
                 time.sleep(POLL)
         finally:
             if fetch.poll() is None:
                 stop_group(fetch.pid, fetch_identity, grace=5)
-            self.update(fetch_pid=None, fetch_identity=None)
+            self.update(fetch_pid=None, fetch_identity=None, progress=None)
         if fetch.returncode != 0:
             raise RuntimeError(self.engine_error(f"the model download failed ({fetch.returncode})"))
         if not (snapshot / "config.json").is_file():
@@ -348,14 +369,44 @@ class Supervisor:
         model = self.spec["model"]
         remaining = max(5.0, deadline - time.time())
         try:
-            answer = self.interruptible(
-                self.http, "POST", "/api/pull", {"model": model, "stream": False},
-                timeout=remaining,
-            )  # fmt: skip
+            self.interruptible(self.pull_stream, model, deadline, remaining)
         except urllib.error.HTTPError as e:
             raise RuntimeError(f"ollama couldn't pull {model}: {ollama_error(e)}") from None
-        if isinstance(answer, dict) and answer.get("error"):
-            raise RuntimeError(f"ollama couldn't pull {model}: {str(answer['error'])[:500]}")
+        finally:
+            self.update(progress=None)
+
+    def pull_stream(self, model: str, deadline: float, timeout: float) -> None:
+        """Ollama's pull, streamed: one JSON line per step. The bytes downloaded so far
+        and the total go to status.json about once a second, as `progress`."""
+        req = urllib.request.Request(  # noqa: S310 - fixed http://127.0.0.1 URL
+            self.base + "/api/pull", data=json.dumps({"model": model, "stream": True}).encode(),
+            method="POST", headers={"Content-Type": "application/json"},
+        )  # fmt: skip
+        layers: dict[str, tuple[int, int]] = {}  # digest -> (completed, total)
+        shown = 0.0
+        with DIRECT.open(req, timeout=timeout) as resp:
+            for raw in resp:
+                try:
+                    line = json.loads(raw)
+                except ValueError:
+                    continue
+                if not isinstance(line, dict):
+                    continue
+                if line.get("error"):
+                    raise RuntimeError(f"ollama couldn't pull {model}: {str(line['error'])[:500]}")
+                digest, total = line.get("digest"), line.get("total")
+                if isinstance(digest, str) and isinstance(total, int) and total > 0:
+                    layers[digest] = (int(line.get("completed") or 0), total)
+                if time.time() - shown >= 1.0 and layers:
+                    shown = time.time()
+                    self.update(progress={
+                        "phase": "downloading",
+                        "completed": sum(c for c, _ in layers.values()),
+                        "total": sum(t for _, t in layers.values()),
+                    })  # fmt: skip
+                self.check_stop()
+                if time.time() > deadline:
+                    raise RuntimeError("the model download did not finish in time")
 
     def run(self) -> None:
         deadline = time.time() + float(self.spec["startup_timeout_s"])
