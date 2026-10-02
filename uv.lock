@@ -1169,15 +1169,30 @@ dependencies = [
     { name = "uvicorn" },
 ]
 
+[package.optional-dependencies]
+mac = [
+    { name = "huggingface-hub", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "matplotlib" },
+    { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "numpy" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "huggingface-hub", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'mac'" },
     { name = "keyring", specifier = ">=25" },
+    { name = "matplotlib", marker = "extra == 'mac'", specifier = ">=3.9" },
+    { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'mac'", specifier = ">=0.30" },
+    { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'mac'", specifier = ">=0.28" },
+    { name = "numpy", marker = "extra == 'mac'", specifier = ">=2,<2.6" },
     { name = "pydantic", specifier = ">=2.8" },
     { name = "pypdf", specifier = ">=5" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
+provides-extras = ["mac"]
 
 [[package]]
 name = "newton-worker"

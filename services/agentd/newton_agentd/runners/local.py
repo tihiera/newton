@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ..runtime_check import interpreter_flags
 from .base import RunnerError
 from .worker_client import WorkerClient, WorkerClientRunner
 
@@ -72,8 +73,11 @@ class LocalRunner(WorkerClientRunner):
             p for p in (str(self.worker_source), env.get("PYTHONPATH")) if p
         )
         log = open(self.root / "worker.log", "ab")  # noqa: SIM115 - handed to the child
+        # agentd's own interpreter and flags (e.g. -s, -B), so the worker and its
+        # jobs import what agentd's capability checks saw; the environment is inherited.
         self.proc = await asyncio.create_subprocess_exec(
             sys.executable,
+            *interpreter_flags(),
             "-m",
             "newton_worker",
             "--root",

@@ -92,6 +92,7 @@ def test_a_running_mac_model_stops_when_the_mac_goes_on_battery(
     store: svc.ServiceStore,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,  # noqa: F811
+    power: Path,  # starts on (faked) AC power, whatever this Mac is on
 ) -> None:
     gate_file = tmp_path / "gate"
     monkeypatch.setenv("NEWTON_MAC_GATE_FILE", str(gate_file))

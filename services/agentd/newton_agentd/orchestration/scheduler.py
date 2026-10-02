@@ -4,14 +4,18 @@ continues: `submitting` jobs are re-submitted with the same idempotent remote id
 stuck in `evaluating` are re-evaluated.
 
 Retries are only for infrastructure failures (unreachable worker, lost wrapper).
-A job that ran and failed is a result, not something to retry.
+A job that ran and failed is a result, not something to retry. A host that can't
+be reached at all (offline, asleep, its name not resolving while this Mac is off
+the network) never fails a job: the job waits for it, with backoff.
 """
 
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -22,7 +26,7 @@ from ..runners.base import RunnerError
 from ..runners.bundle import repository_commit
 from ..storage.db import Database, Row, dumps, loads, now
 from ..storage.files import UnsafeArchive, extract_tar_gz
-from .hosts import HostService
+from .hosts import DELETED, HostService
 from .jobs import job_dir, remote_job_id
 from .state_machine import EXPERIMENT, JOB, ConcurrentTransition, IllegalTransition, record_event
 
@@ -53,6 +57,25 @@ FINAL_FROM_WORKER = {
 }
 BACKOFF_BASE = 5.0
 UPGRADE_WAIT = 60.0
+# Waiting for a host that is down: 5 s, doubling up to 5 min (sooner when it's back).
+HOST_WAIT_START = 5.0
+HOST_WAIT_MAX = 300.0
+# A cancel asked of a job that hasn't started: how long the worker gets to confirm.
+CANCEL_TIMEOUT = 30.0
+UNSTARTED_CANCEL_UNKNOWN = (
+    "cancelled while its host couldn't be reached; its remote state is unknown "
+    "(Newton asks the host to stop it when it is back)"
+)
+UNSTARTED_CANCEL_UNCONFIRMED = (
+    "cancelled; its host didn't confirm it, so its remote state is unknown "
+    "(Newton keeps asking the host to stop it)"
+)
+# Such a cancel is kept as a 'remote_cancel_pending' event on the job (so a restart
+# keeps asking) until a 'remote_cancelled' event settles it. While the host is online
+# it is asked again on the next tick, then after 30 s, doubling up to every 15 min;
+# a host that is down is asked as soon as it is back.
+ORPHAN_RETRY_START = 30.0
+ORPHAN_RETRY_MAX = 900.0
 
 
 class Scheduler:
@@ -64,15 +87,25 @@ class Scheduler:
         self.hosts = hosts
         self.router = router
         self._submit_failures: dict[str, int] = {}
+        self._host_waits: dict[str, int] = {}  # job id -> submits that found its host down
+        # Cancelled before they started without the host confirming it (it was down, or
+        # didn't answer): job id -> (host id, remote id). A submit may have reached the
+        # worker before, so it is asked to stop them until it confirms (persisted as
+        # events: see _load_orphans). job id -> (failed asks, next ask, monotonic).
+        self._orphans: dict[str, tuple[str, str]] = {}
+        self._orphan_due: dict[str, tuple[int, float]] = {}
+        self._orphan_tasks: dict[str, asyncio.Task[None]] = {}
         self._wake = asyncio.Event()
         self._stopped = False
         self._task: asyncio.Task[None] | None = None
         self._host_tasks: dict[str, asyncio.Task[None]] = {}
         self._host_last_pass: dict[str, float] = {}
         self.ticks = 0
+        hosts.add_online_listener(self._host_online)
 
     # -- lifecycle ------------------------------------------------------------
     def start(self) -> None:
+        self._load_orphans()
         self._task = asyncio.create_task(self._run(), name="newton-scheduler")
 
     async def stop(self) -> None:
@@ -82,9 +115,10 @@ class Scheduler:
             await self._task
         # Every transition is persisted as it happens, so cancelling mid-pass is safe:
         # the next start resumes from the database.
-        for task in self._host_tasks.values():
+        tasks = [*self._host_tasks.values(), *self._orphan_tasks.values()]
+        for task in tasks:
             task.cancel()
-        await asyncio.gather(*self._host_tasks.values(), return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
         self._host_tasks.clear()
 
     def wake(self) -> None:
@@ -130,6 +164,8 @@ class Scheduler:
             )
         leased = {lease["host_id"] for lease in self.router.leases()} if self.router else set()
         self.hosts.maintain_gpu(skip=leased)  # never under a timed run, nor while one waits
+        self.hosts.recheck_down_hosts()  # hosts that went down come back by themselves
+        self._retry_orphans()
         await self._advance_experiments()
         self.ticks += 1
 
@@ -177,13 +213,18 @@ class Scheduler:
     async def _submit(self, host_id: str) -> None:
         t = now()
         # `submitting` rows: a crash mid-submit, or a submit retried after a transient
-        # error (same remote id: the first try may be running there already).
+        # error (same remote id: the first try may be running there already). A cancel
+        # asked meanwhile is acted on now, not after the backoff.
         rows = self.db.query(
             "SELECT * FROM jobs WHERE host_id = ? AND state IN ('submitting', 'queued') "
-            "AND (next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY created_at",
+            "AND (next_attempt_at IS NULL OR next_attempt_at <= ? "
+            "OR (state = 'submitting' AND cancel_requested = 1)) ORDER BY created_at",
             (host_id, t),
         )
         for job in rows:
+            if job["state"] == "submitting" and job["cancel_requested"]:
+                await self._cancel_unstarted(job)  # never started once cancelled
+                continue
             alone = _alone(job["manifest"])
             if job["state"] == "queued":
                 if alone and self.hosts.upgrade_blocked(host_id):
@@ -214,6 +255,132 @@ class Scheduler:
                     continue
             await self._submit_one(job)
 
+    def _host_online(self, host_id: str) -> None:
+        """The host is back: jobs waiting for it are submitted now, not after their
+        backoff (which may be minutes by then), and jobs cancelled while it was down
+        are stopped there."""
+        for job_id in list(self._host_waits):
+            row = self.db.query_one("SELECT host_id, state FROM jobs WHERE id = ?", (job_id,))
+            if row is None or row["state"] not in ("queued", "submitting"):
+                self._host_waits.pop(job_id, None)
+            elif row["host_id"] == host_id:
+                self._host_waits.pop(job_id, None)
+                self._set(job_id, next_attempt_at=None)
+        for job_id, (orphan_host, _) in list(self._orphans.items()):
+            if orphan_host == host_id:
+                self._orphan_due.pop(job_id, None)  # due now, whatever its backoff
+        self._retry_orphans(host_id)
+        self._host_last_pass.pop(host_id, None)
+        self.wake()
+
+    async def _cancel_unstarted(self, job: Row) -> None:
+        """A cancel was asked while the job was still being submitted (often waiting
+        for a host that is down). Never submit it again: ask the worker to stop it.
+        If the worker has it, the poll confirms the cancel and collects what it left;
+        if the worker never got it, it is cancelled here; if the host can't be
+        reached, it is cancelled here all the same (remote state unknown), and the
+        worker is asked to stop it when the host is back."""
+        self._submit_failures.pop(job["id"], None)
+        self._host_waits.pop(job["id"], None)
+        try:
+            runner = await self.hosts.runner(job["host_id"])
+            status = await asyncio.wait_for(runner.cancel(job["remote_id"]), CANCEL_TIMEOUT)
+        except RunnerError as e:
+            if e.code == "http_404":  # no submit ever reached the worker
+                self._move(job, "cancelled", error="cancelled before it started",
+                           finished_at=now(), next_attempt_at=None)  # fmt: skip
+                return
+            self.hosts.note_reachability(job["host_id"], e)
+            log.info("cancel of %s wasn't confirmed by its host: %s", job["id"], e)
+            down = self.hosts.is_down(job["host_id"], e)
+            note = UNSTARTED_CANCEL_UNKNOWN if down else f"{UNSTARTED_CANCEL_UNCONFIRMED} ({e})"
+        except (TimeoutError, OSError) as e:
+            log.info("cancel of %s wasn't confirmed by its host: %r", job["id"], e)
+            note = UNSTARTED_CANCEL_UNCONFIRMED
+        else:
+            self.hosts.note_reachability(job["host_id"], None)
+            self._move(job, "running", remote_status=dumps(status), error="cancel pending",
+                       next_attempt_at=None)  # fmt: skip
+            return
+        with self.db.tx():  # the job and its pending remote stop, or neither
+            moved = self._move(job, "cancelled", error=note[:500], finished_at=now(),
+                               next_attempt_at=None)  # fmt: skip
+            if moved:
+                pending = {"host_id": job["host_id"], "remote_id": job["remote_id"]}
+                record_event(self.db, "job", job["id"], "remote_cancel_pending", pending)
+        if moved:
+            self._orphans[job["id"]] = (job["host_id"], job["remote_id"])
+            self._orphan_due.pop(job["id"], None)  # asked again on the next tick
+
+    # -- remote stops for jobs cancelled before they started -------------------------
+    def _load_orphans(self) -> None:
+        """The remote stops still pending (asked before a restart, never confirmed)."""
+        for row in self.db.query(
+            "SELECT p.entity_id, p.data FROM events p WHERE p.entity_type = 'job' "
+            "AND p.kind = 'remote_cancel_pending' AND NOT EXISTS (SELECT 1 FROM events d "
+            "WHERE d.entity_type = 'job' AND d.entity_id = p.entity_id "
+            "AND d.kind = 'remote_cancelled' AND d.id > p.id) ORDER BY p.id"
+        ):
+            data = loads(row["data"]) or {}
+            if data.get("host_id") and data.get("remote_id"):
+                self._orphans[row["entity_id"]] = (data["host_id"], data["remote_id"])
+
+    def _retry_orphans(self, only_host: str | None = None) -> None:
+        """Ask hosts that can be reached to stop the jobs cancelled before they started
+        (once due). A host that is down is skipped: _host_online asks it once back."""
+        t = time.monotonic()
+        for job_id, (host_id, remote_id) in list(self._orphans.items()):
+            if only_host is not None and host_id != only_host:
+                continue
+            task = self._orphan_tasks.get(job_id)
+            due = self._orphan_due.get(job_id, (0, 0.0))[1]
+            if (task is not None and not task.done()) or t < due:
+                continue
+            host = self.db.query_one("SELECT kind, status FROM hosts WHERE id = ?", (host_id,))
+            if host is None or host["status"] == DELETED:  # nothing left to ask
+                self._orphan_settled(job_id, remote_id, "host deleted")
+                continue
+            if host["kind"] != "local" and host["status"] != "online":
+                continue
+            task = asyncio.create_task(self._cancel_orphan(job_id, host_id, remote_id),
+                                       name=f"newton-cancel-{job_id}")  # fmt: skip
+            self._orphan_tasks[job_id] = task
+            task.add_done_callback(functools.partial(self._orphan_task_done, job_id))
+
+    def _orphan_task_done(self, job_id: str, task: asyncio.Task[None]) -> None:
+        if self._orphan_tasks.get(job_id) is task:
+            self._orphan_tasks.pop(job_id, None)
+
+    def _orphan_settled(self, job_id: str, remote_id: str, outcome: str) -> None:
+        self._orphans.pop(job_id, None)
+        self._orphan_due.pop(job_id, None)
+        record_event(self.db, "job", job_id, "remote_cancelled",
+                     {"remote_id": remote_id, "outcome": outcome})  # fmt: skip
+
+    def _orphan_failed(self, job_id: str) -> None:
+        failures = self._orphan_due.get(job_id, (0, 0.0))[0] + 1
+        delay = min(ORPHAN_RETRY_START * 2 ** (failures - 1), ORPHAN_RETRY_MAX)
+        self._orphan_due[job_id] = (failures, time.monotonic() + delay)
+
+    async def _cancel_orphan(self, job_id: str, host_id: str, remote_id: str) -> None:
+        try:
+            runner = await self.hosts.runner(host_id)
+            await asyncio.wait_for(runner.cancel(remote_id), CANCEL_TIMEOUT)
+        except RunnerError as e:
+            if e.code == "http_404":  # no submit had reached it: nothing to stop
+                self._orphan_settled(job_id, remote_id, "never started")
+                return
+            self.hosts.note_reachability(host_id, e)
+            self._orphan_failed(job_id)
+            log.info("stopping cancelled job %s on its host failed: %s", job_id, e)
+            return
+        except (TimeoutError, OSError) as e:
+            self._orphan_failed(job_id)
+            log.info("stopping cancelled job %s on its host failed: %r", job_id, e)
+            return
+        self._orphan_settled(job_id, remote_id, "stopped")
+        self.hosts.note_reachability(host_id, None)
+
     def _note(self, job: Row, note: str) -> None:
         if job["error"] != note:
             self._set(job["id"], error=note)
@@ -238,8 +405,20 @@ class Scheduler:
         # and nothing starts beside one: work running side by side skews the runtimes
         # that evidence compares (on a GB10 the CPU and GPU even share one memory bus).
         if _alone(job["manifest"]):
+            if self._orphan_unasked(job["host_id"]):
+                return False  # a job cancelled there may still run: ask it to stop first
             return not active
         return not any(_alone(a["manifest"]) for a in active)
+
+    def _orphan_unasked(self, host_id: str) -> bool:
+        """A job cancelled before it started on this host (it may be running there) whose
+        stop hasn't been asked again yet, while the host can be asked (online). A timed
+        job waits for that one ask (at most CANCEL_TIMEOUT), not for it to succeed."""
+        if not any(h == host_id and self._orphan_due.get(j, (0, 0.0))[0] == 0
+                   for j, (h, _) in self._orphans.items()):  # fmt: skip
+            return False
+        host = self.db.query_one("SELECT kind, status FROM hosts WHERE id = ?", (host_id,))
+        return host is not None and (host["kind"] == "local" or host["status"] == "online")
 
     # -- device leases (SV3) ---------------------------------------------------------
     def _device_lease(self, job: Row) -> dict[str, Any] | None:
@@ -326,6 +505,16 @@ class Scheduler:
         except RunnerError as e:
             self.hosts.note_reachability(job["host_id"], e)
             log.warning("submit %s failed: %s", job["id"], e)
+            if self.hosts.is_down(job["host_id"], e):
+                # The host (or this Mac's network) is down: not a failed attempt. Wait
+                # for it, same remote id (this try may have reached the worker), and
+                # say so; a host back online retries at once (_host_online).
+                waits = self._host_waits.get(job["id"], 0) + 1
+                self._host_waits[job["id"]] = waits
+                delay = min(HOST_WAIT_START * 2 ** (waits - 1), HOST_WAIT_MAX)
+                self._set(job["id"], error=self.hosts.waiting_note(job["host_id"], e),
+                          next_attempt_at=now() + delay)  # fmt: skip
+                return
             if e.code == "worker_upgrade_pending":
                 # Waiting for the host's worker upgrade is not a failed attempt.
                 self._move(
@@ -355,6 +544,8 @@ class Scheduler:
             self._move(job, "failed", error=f"bundle unavailable: {e}", finished_at=now())
             return
         self._submit_failures.pop(job["id"], None)
+        self._host_waits.pop(job["id"], None)
+        self.hosts.note_reachability(job["host_id"], None)
         self._move(
             job,
             "running",

@@ -12,6 +12,19 @@ dependencies = [
     "pypdf>=5",
 ]
 
+[project.optional-dependencies]
+# What running Newton on a Mac adds (scripts/setup.sh: uv sync --all-packages --extra
+# mac): the local CPU runner (numpy, matplotlib for plots), the Apple GPU backend (mlx)
+# and Mac-served models (mlx-lm, huggingface_hub). The dev venv also gets them from the
+# root dev group.
+mac = [
+    "numpy>=2,<2.6",
+    "matplotlib>=3.9",
+    "mlx>=0.30; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mlx-lm>=0.28; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "huggingface_hub; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
 [project.scripts]
 newton-agentd = "newton_agentd.main:main"
 

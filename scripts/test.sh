@@ -12,9 +12,11 @@ echo "==> mypy"
 uv run mypy
 echo "==> contracts"
 uv run python scripts/export_schemas.py --check
-echo "==> bootstrap.sh syntax"
-sh -n services/worker/bootstrap.sh
-if command -v dash >/dev/null 2>&1; then dash -n services/worker/bootstrap.sh; fi
+echo "==> shell scripts syntax"
+for script in services/worker/bootstrap.sh scripts/setup.sh scripts/run.sh scripts/dev.sh; do
+  sh -n "$script"
+  if command -v dash >/dev/null 2>&1; then dash -n "$script"; fi
+done
 # Desktop shell (apps/desktop): only where its dependencies are installed
 # (`pnpm install` there); the Rust tests only once it has been built.
 if [ -d apps/desktop/node_modules ] && command -v pnpm >/dev/null 2>&1; then

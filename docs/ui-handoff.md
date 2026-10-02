@@ -36,6 +36,10 @@ OpenAI-compatible **router**, used for reading papers.
   - It is a shell today: a placeholder `App.tsx` with a host list.
   - `src/api/client.ts` and `src/api/types.ts` exist; extend them.
   - Run it with `pnpm dev:repo` (agentd via `scripts/dev.sh`), or `pnpm dev`.
+  - Users run Newton from the git clone (B7; no packaged app): `scripts/setup.sh`
+    once, then `scripts/run.sh` (agentd, then the window, or the browser UI at
+    `http://localhost:1420` without Rust). The window's shell starts agentd itself
+    (`uv run newton-agentd serve`) when none answers for its data folder.
 - **No business logic in the UI.** It shows what agentd returns. Verdicts,
   placement, estimates, approval details and evidence colours all come from the API.
 - **Connection.**
@@ -43,8 +47,13 @@ OpenAI-compatible **router**, used for reading papers.
     `base_url` defaulting to `http://127.0.0.1:8765`.
   - Every request carries `Authorization: Bearer <token>`; only `GET /health` and
     `GET /connectors/notion/callback` (a browser tab, §5.6) are public.
-  - The client maps failures to `token_missing | config | unreachable | unauthorized | http`.
-  - Show a clear "agentd isn't running" state for `token_missing` and `unreachable`.
+  - The client maps failures to `token_missing | config | unreachable | unauthorized |
+    http`, plus `engine_starting | engine_failed` from the window's shell.
+  - Connection page: while Newton isn't connected yet (`token_missing`, `unreachable`,
+    `engine_starting`, `http` on `/health`) show only the Newton mark and a spinner, no
+    text, and keep polling with backoff. When waiting can't help (`engine_failed`,
+    `unauthorized`, `config`) show one short line and one button: "Restart" (the Tauri
+    command `restart_engine`) for `engine_failed` in the window, else "Try again".
 - **CSP.** `connect-src` allows only Tauri IPC and `http://127.0.0.1:*`. The UI never
   calls the internet directly.
 - **Live updates: there is no SSE or WebSocket yet. Poll.**
@@ -190,6 +199,21 @@ All paths are relative to `base_url`. JSON in and out unless noted.
   - Fairness rule: variants may differ only in what is compared. Accuracy compares
     the scheme or implementation; performance compares only the implementation.
     Otherwise the result is a 422 with a clear message.
+- **`POST /experiments/library`** (201) compares built-in schemes with a baseline,
+  without a paper (the "Compare built-in schemes" action, §5.7 readiness):
+
+  ```json
+  {"candidates": ["muscl_vanleer", "lax_wendroff"], "baseline": "upwind",
+   "initial_condition": "sine", "host_id": "auto", "backend": "auto", "goal_id": null}
+  ```
+
+  - `candidates`: 1 to 7 library names from `GET /schemes`; only `candidates` is
+    required (the others default as shown). `initial_condition` is
+    `sine|gaussian|square`.
+  - Returns the experiment in `awaiting_approval`, exactly like `POST /experiments`:
+    the approval flow follows.
+  - `400 {error}` for an unknown scheme, the baseline also listed as a candidate, or
+    an unknown `goal_id`; 422 when `candidates` is empty or has more than 7 names.
 - **`GET /experiments?state=`** lists experiments.
 - **`GET /experiments/{id}`** returns:
   - `spec`, `state`, `evidence`, `error`, `report_path`
@@ -261,11 +285,27 @@ All paths are relative to `base_url`. JSON in and out unless noted.
     ```
 
   - `PATCH /goals/{id}` takes the same fields plus `status: active|paused|archived`.
-  - A goal also has `last_polled_at`.
+  - A goal also has:
+    - `last_polled_at`: the last search that worked (a failed one leaves it alone).
+    - `last_poll_error`: why the last poll couldn't search arXiv (no connection, arXiv
+      down or answering badly, no reader model, keywords it can't search), as a
+      sentence to show; null after a poll that worked.
+    - `next_poll_at`: when the loop looks again: 5 minutes after a failure, doubling
+      to 1 hour while polls keep failing, else `poll_hours` after the last poll that
+      worked; null when the goal is paused or was never polled (the loop's next pass).
+    - Changing `keywords`, `categories` or `poll_hours`, or setting `status: active`,
+      clears `last_poll_error` and the backoff.
 - **`POST /goals/{id}/poll`** looks for papers now and returns a summary:
   - `{goal_id, found, new, relevant, dismissed, carded, proposed: [experiment ids],
     skipped: [{item, why}], error?}`
-  - `error` is set when no model is configured.
+  - `error` is set when no model is configured (the goal then gets the same
+    `last_poll_error`).
+  - `502 {error, code}` when arXiv can't be reached (`code: "offline"`) or answered
+    badly (`code: "arxiv"`); `400 {error}` when the goal's keywords can't be searched.
+    The goal records the error and its `next_poll_at`: show the sentence and when it
+    tries again.
+  - While arXiv can't be reached the loop doesn't poll: it probes arXiv at most once a
+    minute and polls the goals that failed once it answers again.
 - **`POST /research/ingest {ref, goal_id?, model?}`** (202) ingests one paper. `ref`
   is an arXiv id or URL. It returns the item, which then moves from `discovered` to
   `extracting`, then `carded` or `failed`.
@@ -409,15 +449,52 @@ All paths are relative to `base_url`. JSON in and out unless noted.
   `[{id, target, destination, state, url, error, content_sha256, created_at}]`.
   Show `error` as is, e.g. "GitHub couldn't find owner/name: Connect reaches public
   repositories only; paste a token with repo access for private ones".
+- **`POST /publications/{id}/retry`** sends a `failed` publication again, with no new
+  approval, when the approved text is unchanged (its `content_sha256`). It returns the
+  publication (`approved`, then `publishing`). A Notion page that was partly written is
+  continued, not started again. `409 {error, code}`:
+  - `not_failed`: it isn't failed (or is already being sent again).
+  - `content_changed`: the report changed after approval: publish again (a new
+    approval).
+  - `maybe_sent`: the report may already be there (the answer never came back): the
+    sentence says where to check; publish again if it isn't there.
+  - `404` for an unknown id.
 
 ### 5.7 System
 
-- `GET /health` (public) returns `{status, version, db: {ok, schema_version},
-  scheduler: {running, ticks}, uptime_seconds}`.
+- `GET /health` (public) returns:
+
+  ```json
+  {"status": "ok", "version": "0.1.0",
+   "db": {"ok": true, "schema_version": 11, "path": "<data folder>/newton.db"},
+   "scheduler": {"running": true, "ticks": 42}, "uptime_seconds": 12.5,
+   "runtime": {"packaged": false, "resources_ok": true, "problems": []}}
+  ```
+
+  - `db.path` tells which data folder this agentd uses: `scripts/run.sh` and the
+    window's shell use it to recognise their own engine on the port.
+  - `network` (also in the answer) is internal: the state Newton's own outbound calls
+    (arXiv, GitHub, Notion, downloads) last saw. The UI doesn't show it.
+  - `runtime.problems` lists missing parts of the clone (benchmark code, worker) as
+    sentences; `packaged` is always false (no packaged app ships).
+- **`GET /readiness`** says what this Mac can do now, from cached state only (no
+  network call, no Keychain read): `{items: [{key, state, title, detail, action}]}`.
+  - `key`, in this order: `engine`, `cpu`, `metal`, `reader`, `gpu_host`, `keychain`.
+  - `state`: `ok | warn | missing`. Show `title` and `detail` as they are.
+  - `action`: null, or `{kind, label}` with `kind` one of `open_models`,
+    `open_compute`, `open_settings` and `new_experiment` (`POST /experiments/library`).
+    With no reader model, `reader` is `missing` with `open_models` ("Choose a reader
+    model").
 - `GET /events?after=&limit=&entity_type=&entity_id=` is the activity feed (§2).
   Useful kinds include:
   - `state` (`data: {from, to}`), `created`, `connected`, `device_lease`, `forwarded`
-  - `reachable`/`unreachable`, `poll`, `carded`, `proposed`, `published`, `finding`
+  - `reachable`/`unreachable`, `back_online`, `poll`, `carded`, `proposed`,
+    `published`, `retry`, `finding`
+  - A `poll` event with `data.error` (and `code`) is a failed poll; it is logged once
+    per failure streak.
+- A job or model service waiting for a GPU box that is down doesn't fail: it keeps its
+  state, with `error` "waiting for <host>: <why>", and goes ahead when the host is back
+  online (a job tries again after 5 s, doubling up to 5 min).
 
 ---
 
@@ -460,6 +537,14 @@ All paths are relative to `base_url`. JSON in and out unless noted.
    2. On a reported experiment, press Publish, choose where, then approve: the card
       shows the preview of exactly what is sent.
    3. The result is a link (the publication `url`).
+   4. A `failed` publication offers Retry (`POST /publications/{id}/retry`); on a 409
+      show the sentence (and, for `content_changed`, offer Publish again).
+7. **First run** (no reader model, no GPU box)
+   1. Home shows `GET /readiness`: one row per part, with its sentence and action.
+   2. "Choose a reader model" opens Models; "Connect a GPU box" opens Machines.
+   3. "New experiment from built-in schemes" (or the `new_experiment` readiness
+      action) calls `POST /experiments/library` with the schemes the user picks from
+      `GET /schemes`, then the approval flow (2).
 
 ---
 

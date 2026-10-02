@@ -9,6 +9,17 @@ a parent page the user's integration can see. Tokens live in the secret store
 (Keychain): from one-click Connect (oauth.py), pasted, or GitHub's imported from the
 GitHub CLI (`gh auth token`, a fixed argv) when the user asks. Notion's OAuth token is
 refreshed before it expires (NotionSession).
+
+Offline (B7): a publication that couldn't reach GitHub or Notion fails with a sentence
+saying so, and can be sent again (POST /publications/{id}/retry) without a new approval
+as long as its frozen text is unchanged (same sha256). "Wasn't sent" only when the
+request provably never left the Mac (no connection was made); when it may have arrived
+(the answer never came back), retry refuses: the report may already be there. A Notion
+page created before the network went (the rest of its blocks unsent) is finished by
+retry, on the same page. How each failure can be retried is its 'failed' event.
+
+    failed event {retry: fresh | resume | no, page_id, url, blocks}
+      fresh: send it all again; resume: append blocks[blocks:] to page_id; no: 409
 """
 
 from __future__ import annotations
@@ -18,6 +29,7 @@ import contextlib
 import hashlib
 import logging
 import re
+import socket
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -27,6 +39,7 @@ import httpx
 
 from ..config import Settings
 from ..errors import Conflict
+from ..network import NetworkState, is_offline_error
 from ..orchestration.approvals import Approvals
 from ..orchestration.state_machine import record_event
 from ..runners.base import RunnerError
@@ -43,18 +56,52 @@ ISSUE_LIMIT = 65_000  # GitHub's issue body limit is 65,536 characters
 # Connect asks GitHub for public_repo only: a private repository answers 404.
 PRIVATE_REPO = ("GitHub couldn't find {repo}: Connect reaches public repositories only; "
                 "paste a token with repo access for private ones")  # fmt: skip
+NAMES = {"github": "GitHub", "notion": "Notion"}
+NOT_SENT = "{name} couldn't be reached: the report wasn't sent; try again when online"
+MAYBE_SENT = ("{name} stopped answering after the report was sent: check whether it was "
+              "published before publishing it again")  # fmt: skip
+PARTLY_SENT = ("Notion couldn't be reached while adding the rest of the report to {url}: "
+               "try again when online to finish that page")  # fmt: skip
+PARTLY_MAYBE = ("Notion stopped answering while adding the rest of the report to {url}: "
+                "check that page before publishing it again")  # fmt: skip
+# A failure recorded without its 'failed' event (before B7) that sent nothing for sure.
+LEGACY_NOT_SENT = ("not connected to github any more", "not connected to notion any more")
+NO_LINK = ("{name} took the report but its answer had no link: check whether it was "
+           "published before publishing it again")  # fmt: skip
+# Failures before any byte of the request left the Mac: it can't have arrived.
+NEVER_LEFT: tuple[type[BaseException], ...] = (
+    httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout, socket.gaierror,
+    ConnectionRefusedError,
+)  # fmt: skip
+CHANGED = "the report changed after it was approved: not sent"
 
 
 class PublishError(ValueError):
     pass
 
 
+class Delivered(PublishError):
+    """The destination took the report, but its answer was unusable: don't send again."""
+
+
+def never_left(exc: BaseException | None) -> bool:
+    """The request failed before it was sent: no connection (its causes too)."""
+    seen = 0
+    while exc is not None and seen < 8:
+        if isinstance(exc, NEVER_LEFT):
+            return True
+        exc = exc.__cause__ or (None if exc.__suppress_context__ else exc.__context__)
+        seen += 1
+    return False
+
+
 class Publisher:
     def __init__(self, settings: Settings, db: Database, approvals: Approvals,
-                 secrets: SecretStore) -> None:  # fmt: skip
+                 secrets: SecretStore, network: NetworkState | None = None) -> None:  # fmt: skip
         self.settings = settings
         self.db = db
         self.secrets = secrets
+        self.network = network or NetworkState()
         approvals.register(APPROVAL_KIND, self._on_decision)
         self.approvals = approvals
         self._tasks: set[asyncio.Task[None]] = set()
@@ -62,7 +109,7 @@ class Publisher:
             timeout=httpx.Timeout(60, connect=15)
         )
         # One-click Connect shares the HTTP factory (tests mock both through it).
-        self.oauth = OAuth(settings, db, secrets, lambda: self.http_factory())
+        self.oauth = OAuth(settings, db, secrets, lambda: self.http_factory(), self.network)
 
     @property
     def dir(self) -> Path:
@@ -130,7 +177,9 @@ class Publisher:
         except NotionReauth as e:
             raise Conflict(str(e), code="notion_reauth") from None
         except httpx.HTTPError as e:
-            raise RunnerError(_safe(f"Notion couldn't be reached: {e}"), code="notion") from None
+            self.network.note_failure("notion", e)
+            raise RunnerError("Notion couldn't be reached: check the network",
+                              code="notion") from None  # fmt: skip
         if resp.status_code != 200:
             raise RunnerError(_safe(f"Notion answered {resp.status_code}: {_api_message(resp)}"),
                               transient=False, code="notion")  # fmt: skip
@@ -246,15 +295,18 @@ class Publisher:
         await asyncio.gather(*self._tasks, return_exceptions=True)
 
     # -- sending -------------------------------------------------------------------------
-    async def _publish(self, pub_id: str) -> None:
+    async def _publish(self, pub_id: str, resume: dict[str, Any] | None = None) -> None:
+        """Send it (resume: a Notion page created earlier, to finish). progress says what
+        reached the destination so far: how a failure can be retried."""
         row = self.db.query_one("SELECT * FROM publications WHERE id = ?", (pub_id,))
         if row is None or row["state"] != "approved":
             return
         self._set(pub_id, state="publishing")
+        progress: dict[str, Any] = dict(resume or {})
         try:
             text = Path(row["content_path"]).read_text(encoding="utf-8")
             if hashlib.sha256(text.encode()).hexdigest() != row["content_sha256"]:
-                raise PublishError("the report changed after it was approved: not sent")
+                raise PublishError(CHANGED)
             exp = self.db.query_one("SELECT title FROM experiments WHERE id = ?",
                                     (row["experiment_id"],))  # fmt: skip
             title = f"Newton: {exp['title'] if exp else row['experiment_id']}"[:200]
@@ -271,14 +323,98 @@ class Publisher:
                     notion = NotionSession(self.oauth, http)
                     if not await notion.open():
                         raise PublishError("not connected to notion any more")
-                    url = await self._notion(notion, destination, title, text)
+                    url = await self._notion(notion, destination, title, text, progress)
             self._set(pub_id, state="published", url=url, error=None)
             record_event(self.db, "publication", pub_id, "published", {"url": url})
         except asyncio.CancelledError:
             raise
         except Exception as e:  # noqa: BLE001 - any failure is the publication's result
-            log.warning("publication %s failed: %s", pub_id, e)
-            self._set(pub_id, state="failed", error=_safe(str(e))[:500])
+            log.warning("publication %s failed: %s", pub_id, str(e) or type(e).__name__)
+            error, retry = self._failure(row["target"], e, progress)
+            with self.db.tx():
+                self._set(pub_id, state="failed", error=error)
+                record_event(self.db, "publication", pub_id, "failed",
+                             {"error": error, "retry": retry, **progress})  # fmt: skip
+
+    def _failure(self, target: str, e: Exception,
+                 progress: dict[str, Any] | None = None) -> tuple[str, str]:  # fmt: skip
+        """Why a publication failed, as a sentence (never empty, never a token), and how
+        it can be retried: fresh (nothing arrived), resume (finish the Notion page) or no
+        (it may have arrived: sending it again could publish it twice)."""
+        name = NAMES.get(target, target)
+        page_url = (progress or {}).get("url")
+        network = isinstance(e, httpx.TransportError) or is_offline_error(e)
+        if network:
+            self.network.note_failure(target, e)
+        if isinstance(e, Delivered):
+            return str(e), "no"
+        if page_url:  # a Notion page exists with part of the report
+            if network and not never_left(e):
+                return PARTLY_MAYBE.format(url=page_url), "no"
+            if network:
+                return PARTLY_SENT.format(url=page_url), "resume"
+            reason = (_safe(str(e)).strip() or type(e).__name__)[:300]
+            return f"{reason}: part of the report is already at {page_url}", "resume"
+        if network:
+            if never_left(e):
+                return NOT_SENT.format(name=name), "fresh"
+            return MAYBE_SENT.format(name=name), "no"
+        return (_safe(str(e)).strip() or type(e).__name__)[:500], "fresh"
+
+    # -- sending again -------------------------------------------------------------------
+    def retry(self, pub_id: str) -> dict[str, Any]:
+        """Send a failed publication again: the text approved then, unchanged (its sha256),
+        so no new approval. Conflict (409) when it isn't failed, or the text changed."""
+        row = self.db.query_one("SELECT * FROM publications WHERE id = ?", (pub_id,))
+        if row is None:
+            raise KeyError(pub_id)
+        if row["state"] != "failed":
+            raise Conflict(f"only a failed publication can be sent again (this one is "
+                           f"{row['state'].replace('_', ' ')})", code="not_failed")  # fmt: skip
+        try:
+            text: str | None = Path(row["content_path"]).read_text(encoding="utf-8")
+        except (OSError, ValueError):
+            text = None
+        if text is None or hashlib.sha256(text.encode()).hexdigest() != row["content_sha256"]:
+            raise Conflict("the report changed after it was approved: publish it again to "
+                           "approve the new text", code="content_changed")  # fmt: skip
+        approved = self.db.query_one(
+            "SELECT 1 FROM approvals WHERE kind = ? AND subject_id = ? AND status = 'approved'",
+            (APPROVAL_KIND, pub_id),
+        )  # fmt: skip
+        if approved is None:  # can't happen: only an approved publication is ever sent
+            raise Conflict("this publication was never approved", code="not_approved")
+        last = self.db.query_one(
+            "SELECT data FROM events WHERE entity_type = 'publication' AND entity_id = ? "
+            "AND kind = 'failed' ORDER BY id DESC LIMIT 1", (pub_id,),
+        )  # fmt: skip
+        failure = (loads(last["data"]) or {}) if last else {}
+        if last is None and not str(row["error"] or "").startswith(LEGACY_NOT_SENT):
+            # Failed before Newton recorded how a failure can be retried (before B7): a
+            # page or issue may exist already (a Notion append that failed, an answer
+            # that never came back). Only "not connected" provably sent nothing.
+            failure = {"retry": "no"}
+        if failure.get("retry") == "no":  # it may be there already: never twice
+            where = failure.get("url") or NAMES.get(row["target"], row["target"])
+            raise Conflict(f"the report may already be at {where}: check it, and publish "
+                           "it again (a new approval) if it isn't there",
+                           code="maybe_sent")  # fmt: skip
+        resume = None
+        if failure.get("retry") == "resume" and failure.get("page_id"):
+            resume = {k: failure.get(k) for k in ("page_id", "url", "blocks")}
+        with self.db.tx():
+            moved = self.db.execute(
+                "UPDATE publications SET state = 'approved', error = NULL, updated_at = ? "
+                "WHERE id = ? AND state = 'failed'", (now(), pub_id),
+            )  # fmt: skip
+            if moved != 1:
+                raise Conflict("this publication is already being sent again", code="not_failed")
+            record_event(self.db, "publication", pub_id, "retry",
+                         {"sha256": row["content_sha256"]})  # fmt: skip
+        task = asyncio.get_running_loop().create_task(self._publish(pub_id, resume))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return self.get(pub_id)
 
     async def _github(self, http: httpx.AsyncClient, token: str, d: dict[str, Any],
                       title: str, text: str, method: str | None = None) -> str:  # fmt: skip
@@ -296,32 +432,52 @@ class Publisher:
             )
             issues = f"{self.settings.github_api}/repos/{d['repo']}/issues"
             resp = await http.post(issues, headers=headers, json={"title": title, "body": body})
-            if resp.status_code == 404 and method == "oauth":
-                raise PublishError(PRIVATE_REPO.format(repo=d["repo"]))
+        self.network.note_ok("github")  # an answer: GitHub was reached
+        if resp.status_code == 404 and d["kind"] == "issue" and method == "oauth":
+            raise PublishError(PRIVATE_REPO.format(repo=d["repo"]))
         if resp.status_code not in (200, 201):
             raise PublishError(f"GitHub answered {resp.status_code}: {_api_message(resp)}")
-        url: str = resp.json()["html_url"]
+        url = _link(resp, "html_url")
+        if url is None:  # created, but which one is unknown
+            raise Delivered(NO_LINK.format(name="GitHub"))
         return url
 
-    async def _notion(self, notion: NotionSession, d: dict[str, Any],
-                      title: str, text: str) -> str:  # fmt: skip
+    async def _notion(self, notion: NotionSession, d: dict[str, Any], title: str,
+                      text: str, progress: dict[str, Any]) -> str:  # fmt: skip
+        """A page with the report's blocks. progress: the page once created ({page_id,
+        url}) and how many blocks it has; given one, the rest is appended to it."""
         api = self.settings.notion_api
         blocks = notion_blocks(text)
-        resp = await notion.request("POST", f"{api}/pages", {
-            "parent": {"page_id": d["parent_page_id"]},
-            "properties": {"title": {"title": [{"text": {"content": title}}]}},
-            "children": blocks[:100],
-        })  # fmt: skip
-        if resp.status_code != 200:
-            raise PublishError(f"Notion answered {resp.status_code}: {_api_message(resp)}")
-        page = resp.json()
-        for start in range(100, len(blocks), 100):  # Notion takes 100 blocks per request
-            batch = {"children": blocks[start : start + 100]}
-            more = await notion.request("PATCH", f"{api}/blocks/{page['id']}/children", batch)
+        if not progress.get("page_id"):
+            resp = await notion.request("POST", f"{api}/pages", {
+                "parent": {"page_id": d["parent_page_id"]},
+                "properties": {"title": {"title": [{"text": {"content": title}}]}},
+                "children": blocks[:100],
+            })  # fmt: skip
+            if resp.status_code != 200:
+                raise PublishError(f"Notion answered {resp.status_code}: {_api_message(resp)}")
+            page_id, url = _link(resp, "id"), _link(resp, "url")
+            if page_id is None or url is None:
+                raise Delivered(NO_LINK.format(name="Notion"))
+            progress.update(page_id=page_id, url=url, blocks=min(100, len(blocks)))
+        page_id, url = str(progress["page_id"]), str(progress["url"])
+        for start in range(int(progress.get("blocks") or 0), len(blocks), 100):
+            batch = {"children": blocks[start : start + 100]}  # Notion takes 100 at a time
+            more = await notion.request("PATCH", f"{api}/blocks/{page_id}/children", batch)
             if more.status_code != 200:
                 raise PublishError(f"Notion answered {more.status_code}: {_api_message(more)}")
-        url: str = page["url"]
+            progress["blocks"] = min(start + 100, len(blocks))
         return url
+
+
+def _link(resp: httpx.Response, key: str) -> str | None:
+    """A string field of a JSON answer (None: not JSON, or not there)."""
+    try:
+        data = resp.json()
+    except ValueError:
+        return None
+    value = data.get(key) if isinstance(data, dict) else None
+    return value if isinstance(value, str) and value else None
 
 
 def _api_message(resp: httpx.Response) -> str:

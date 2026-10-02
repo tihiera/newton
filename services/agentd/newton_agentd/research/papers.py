@@ -32,6 +32,7 @@ from typing import Any
 import httpx
 
 from ..config import Settings
+from ..network import NetworkState
 from ..orchestration.state_machine import RESEARCH_ITEM, ConcurrentTransition, record_event
 from ..storage.db import Database, Row, dumps, loads, new_id, now
 from . import schemes
@@ -49,6 +50,8 @@ CARD_TOKENS = 1200  # the model's answer (max_tokens)
 CHARS_PER_TOKEN = 3  # LaTeX-heavy text: fewer characters per token than prose
 CONTEXT_MARGIN = 256  # tokens kept free: chat template, tokenizers that count differently
 MIN_TEXT = 1000  # less of the paper than this isn't worth asking a model about
+RETRY_DELAY = 3.0  # seconds before the one retry (no sooner than arXiv's API pace)
+UNREACHABLE = "arXiv couldn't be reached: check the network"
 ATOM = {"a": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 
 LIMITER_CHOICES = ("none", "minmod", "van_leer", "superbee", "mc", "koren", "other")
@@ -85,6 +88,26 @@ Use "other" when none of the choices fits. Do not invent claims the paper does n
 
 class PaperError(ValueError):
     pass
+
+
+class ArxivUnreachable(PaperError):
+    """No answer from arXiv at all (no network, DNS, refused, timed out). `offline`:
+    the failure was connection-level, as NetworkState classifies it."""
+
+    def __init__(self, message: str, *, offline: bool = False) -> None:
+        super().__init__(message)
+        self.offline = offline
+
+
+def unreachable(http: httpx.AsyncClient, exc: httpx.TransportError,
+                offline: bool) -> ArxivUnreachable:  # fmt: skip
+    """A transport failure as a sentence (no exception text: it can be empty)."""
+    if isinstance(exc, httpx.TimeoutException):
+        timeout = http.timeout
+        limit = timeout.connect if isinstance(exc, httpx.ConnectTimeout) else timeout.read
+        if limit:
+            return ArxivUnreachable(f"arXiv didn't answer within {limit:g} s", offline=offline)
+    return ArxivUnreachable(UNREACHABLE, offline=offline)
 
 
 def text_budget(context_length: int | None, prompt_chars: int) -> int:
@@ -140,8 +163,13 @@ def parse_atom(xml: bytes, aid: str) -> dict[str, Any]:
 
 
 def parse_feed(xml: bytes) -> list[dict[str, Any]]:
-    """Every paper in an arXiv API search result."""
-    root = ET.fromstring(xml)  # noqa: S314 - arXiv's own API response, size-capped
+    """Every paper in an arXiv API search result (PaperError: not a search result)."""
+    try:
+        root = ET.fromstring(xml)  # noqa: S314 - arXiv's own API response, size-capped
+    except ET.ParseError:
+        root = None
+    if root is None or root.tag != f"{{{ATOM['a']}}}feed":  # a captive portal, a proxy
+        raise PaperError("arXiv's answer wasn't a search result (a captive portal?)")
     out = []
     for entry in root.findall("a:entry", ATOM):
         raw_id = (entry.findtext("a:id", "", ATOM) or "").strip()
@@ -313,11 +341,14 @@ def slugify(name: str, aid: str) -> str:
 
 
 class Papers:
-    def __init__(self, settings: Settings, db: Database, router: Any, profile: Any) -> None:
+    def __init__(self, settings: Settings, db: Database, router: Any, profile: Any,
+                 network: NetworkState | None = None) -> None:  # fmt: skip
         self.settings = settings
         self.db = db
         self.router = router
         self.profile = profile
+        self.network = network or NetworkState()
+        self.retry_delay = RETRY_DELAY
         self._tasks: set[asyncio.Task[None]] = set()
         self.http_factory: Callable[[], httpx.AsyncClient] = lambda: httpx.AsyncClient(
             timeout=httpx.Timeout(60, connect=15),
@@ -356,7 +387,10 @@ class Papers:
         existing = self.db.query_one(
             "SELECT * FROM research_items WHERE source = 'arxiv' AND external_id = ?", (aid,)
         )
-        if existing is not None and existing["state"] != "failed":
+        old = (loads(existing["data"]) or {}) if existing is not None else {}
+        # The loop found it but couldn't triage it (offline, no reader): Read again.
+        untriaged = existing is not None and existing["state"] == "discovered" and old.get("error")
+        if existing is not None and existing["state"] != "failed" and not untriaged:
             return self.view(existing)
         if goal_id and not self.db.query_one("SELECT 1 FROM goals WHERE id = ?", (goal_id,)):
             raise PaperError(f"unknown goal {goal_id}")
@@ -364,12 +398,17 @@ class Papers:
         if not model:
             raise PaperError("no model: pass one, or set default_model in the profile")
         t = now()
-        if existing is not None:  # a failed attempt: try again, same item
+        meta: dict[str, Any] | None = None
+        if existing is not None:  # a failed attempt, or an untriaged find: same item
             item_id = existing["id"]
+            data: dict[str, Any] = {"model": model}
+            if untriaged and isinstance(old.get("paper"), dict):  # metadata already known
+                meta = old["paper"]
+                data.update(paper=meta, found_by=old.get("found_by"))
             self.db.execute(
                 "UPDATE research_items SET state = 'discovered', data = ?, updated_at = ? "
                 "WHERE id = ?",
-                (dumps({"model": model}), t, item_id),
+                (dumps(data), t, item_id),
             )
         else:
             item_id = new_id("paper")
@@ -379,7 +418,7 @@ class Papers:
                 "data": dumps({"model": model}), "created_at": t, "updated_at": t,
             })  # fmt: skip
         record_event(self.db, "research_item", item_id, "ingest", {"arxiv_id": aid, "model": model})
-        task = asyncio.get_running_loop().create_task(self._run(item_id, aid, model))
+        task = asyncio.get_running_loop().create_task(self._run(item_id, aid, model, meta))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return self.get(item_id)
@@ -455,19 +494,39 @@ class Papers:
         """The research loop's way in: card an item it found (awaited, not detached)."""
         await self._run(item_id, aid, model, meta)
 
+    async def fetch(self, http: httpx.AsyncClient, url: str) -> httpx.Response:
+        """GET from arXiv, retried once (after retry_delay) when it couldn't connect or
+        was busy (5xx, 429). No answer at all: ArxivUnreachable, a sentence. Every try
+        tells NetworkState how it went."""
+        for attempt in (1, 2):
+            try:
+                resp = await _get(http, url)
+            except httpx.TransportError as e:  # no answer: network, DNS, timeout
+                offline = self.network.note_failure("arxiv", e)
+                if attempt == 1 and isinstance(e, (httpx.ConnectError, httpx.ConnectTimeout)):
+                    await asyncio.sleep(self.retry_delay)
+                    continue
+                raise unreachable(http, e, offline) from None
+            self.network.note_ok("arxiv")
+            if attempt == 1 and (resp.status_code == 429 or resp.status_code >= 500):
+                await asyncio.sleep(self.retry_delay)
+                continue
+            return resp
+        raise AssertionError("unreachable")  # pragma: no cover - the loop always returns
+
     async def fetch_metadata(self, http: httpx.AsyncClient, aid: str) -> dict[str, Any]:
-        resp = await _get(http, f"{ARXIV_API}?id_list={aid}&max_results=1")
+        resp = await self.fetch(http, f"{ARXIV_API}?id_list={aid}&max_results=1")
         if resp.status_code != 200:
             raise PaperError(f"arXiv's API answered {resp.status_code}")
         return parse_atom(resp.content, aid)
 
     async def fetch_text(self, http: httpx.AsyncClient, aid: str) -> tuple[str, str]:
-        resp = await _get(http, ARXIV_HTML.format(id=aid))
+        resp = await self.fetch(http, ARXIV_HTML.format(id=aid))
         if resp.status_code == 200 and "html" in resp.headers.get("content-type", ""):
             text = html_text(resp.content)
             if len(text) > 2000:
                 return text, "html"
-        resp = await _get(http, ARXIV_PDF.format(id=aid))
+        resp = await self.fetch(http, ARXIV_PDF.format(id=aid))
         if resp.status_code != 200:
             raise PaperError(f"no full text: arXiv answered {resp.status_code} for the PDF")
         text = await asyncio.to_thread(pdf_text, resp.content)

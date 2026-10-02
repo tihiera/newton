@@ -37,6 +37,7 @@ import httpx
 
 from ..config import Settings
 from ..errors import Conflict
+from ..network import NetworkState
 from ..orchestration.state_machine import record_event
 from ..runners.base import RunnerError
 from ..secrets import SecretStore
@@ -136,11 +137,13 @@ class Flow:
 
 class OAuth:
     def __init__(self, settings: Settings, db: Database, secrets: SecretStore,
-                 http: Callable[[], httpx.AsyncClient]) -> None:  # fmt: skip
+                 http: Callable[[], httpx.AsyncClient],
+                 network: NetworkState | None = None) -> None:  # fmt: skip
         self.settings = settings
         self.db = db
         self.secrets = secrets
         self.http = http
+        self.network = network or NetworkState()  # told how each call went
         self.accounts = Accounts(db)
         self.sleep: Callable[[float], Awaitable[None]] = asyncio.sleep  # tests drive the poll
         self.state_ttl = STATE_TTL
@@ -200,8 +203,10 @@ class OAuth:
                     headers={"Accept": "application/json"},
                     data={"client_id": self.settings.github_client_id, "scope": GITHUB_SCOPE},
                 )
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            self.network.note_failure("github", e)
             raise RunnerError("GitHub couldn't be reached", code="github") from None
+        self.network.note_ok("github")
         data = _json(resp)
         device_code, user_code = data.get("device_code"), data.get("user_code")
         uri, expires_in = data.get("verification_uri"), data.get("expires_in")
@@ -261,8 +266,10 @@ class OAuth:
                             data={"client_id": self.settings.github_client_id,
                                   "device_code": device_code, "grant_type": DEVICE_GRANT},
                         )  # fmt: skip
-                except httpx.HTTPError:
+                except httpx.HTTPError as e:
+                    self.network.note_failure("github", e)
                     continue  # GitHub out of reach for a moment: the code is still good
+                self.network.note_ok("github")
                 data = _json(resp)
                 token = data.get("access_token")
                 if isinstance(token, str) and token:
@@ -299,10 +306,11 @@ class OAuth:
                 resp = await http.get(f"{self.settings.github_api}/user", headers={
                     "Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
                     "X-GitHub-Api-Version": "2022-11-28"})  # fmt: skip
+            self.network.note_ok("github")
             user = _json(resp) if resp.status_code == 200 else {}
             login, avatar = _str(user, "login") or "", _str(user, "avatar_url")
-        except httpx.HTTPError:
-            pass
+        except httpx.HTTPError as e:
+            self.network.note_failure("github", e)
         self.accounts.save("github", name=login or "", icon=avatar, method="oauth")
         flow.connecting = False
         self._connected("github", flow)
@@ -366,8 +374,9 @@ class OAuth:
             async with self.http() as http:
                 resp = await http.post(f"{self._broker()}/notion/token", json={
                     "code": code, "redirect_uri": self.settings.notion_callback_url})  # fmt: skip
-        except httpx.HTTPError:
-            pass
+            self.network.note_ok("notion")
+        except httpx.HTTPError as e:
+            self.network.note_failure("notion", e)
         if self._notion is not flow or flow.state != "pending":
             log.info("Notion sign-in was cancelled or replaced meanwhile: its answer was dropped")
             return 400, PAGE_CANCELLED
@@ -474,9 +483,11 @@ class OAuth:
             try:
                 resp = await http.post(f"{self._broker()}/notion/refresh",
                                        json={"refresh_token": refresh})  # fmt: skip
-            except httpx.HTTPError:
+            except httpx.HTTPError as e:
+                self.network.note_failure("notion", e)
                 log.info("Notion's token couldn't be refreshed: the broker is out of reach")
                 raise RunnerError(RENEW_LATER, code="notion") from None
+            self.network.note_ok("notion")
             data = _json(resp)
             access = data.get("access_token")
             if resp.status_code in (400, 401):  # rejected (invalid_grant): connect again
@@ -538,12 +549,21 @@ class NotionSession:
         return {"Authorization": f"Bearer {self.token}", "Notion-Version": NOTION_VERSION}
 
     async def request(self, method: str, url: str, body: dict[str, Any]) -> httpx.Response:
-        resp = await self.http.request(method, url, headers=self.headers, json=body)
+        resp = await self._send(method, url, body)
         if (resp.status_code == 401 and not self.refreshed
                 and await self.oauth.can_refresh_notion()):  # fmt: skip
             self.refreshed = True
             self.token = await self.oauth.refresh_notion(self.http, self.token)
+            resp = await self._send(method, url, body)
+        return resp
+
+    async def _send(self, method: str, url: str, body: dict[str, Any]) -> httpx.Response:
+        try:
             resp = await self.http.request(method, url, headers=self.headers, json=body)
+        except httpx.HTTPError as e:
+            self.oauth.network.note_failure("notion", e)
+            raise
+        self.oauth.network.note_ok("notion")
         return resp
 
 

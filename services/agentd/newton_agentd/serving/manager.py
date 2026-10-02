@@ -55,6 +55,11 @@ SERVING = ("ready", "draining")  # reachable while in these states
 KEYED_ENGINES = ("vllm", "fake")  # engines that check an API key (Ollama can't)
 POLL_EVERY = 2.0  # seconds between worker checks per service
 BACKOFF_MAX = 60.0  # seconds, for a host that keeps failing
+# An approved service whose host is down (or this Mac offline) waits for it: never
+# failed for that. Its start is retried after 5 s, doubling up to 5 min, and at once
+# when the host comes back online.
+HOST_WAIT_START = 5.0
+HOST_WAIT_MAX = 300.0
 PROBE_EVERY = 10.0  # seconds between endpoint probes on this Mac
 REBUILD_AFTER = 2  # consecutive connect failures before a live forward is rebuilt
 # The worker's state -> ours (the worker has a separate "loading" phase).
@@ -136,6 +141,8 @@ class ServiceManager:
         self.is_leased: Callable[[str], bool] = lambda host_id: False
         self.on_late_start: Callable[[str, str], None] = lambda host_id, service_id: None
         self._starting: dict[str, str] = {}  # service_id -> host_id: a start on its way
+        self._host_down: set[str] = set()  # approved services waiting for their host
+        hosts.add_online_listener(self._host_online)
 
     # -- records -------------------------------------------------------------------
     def get_row(self, service_id: str) -> Row:
@@ -202,6 +209,16 @@ class ServiceManager:
             record_event(self.db, "service", service_id, "unreachable", {"by": "router"})
         self._last_probe.pop(service_id, None)
         self.wake(service_id)
+
+    def _host_online(self, host_id: str) -> None:
+        """A host is back: its services are advanced now, not after their backoff."""
+        for row in self.db.query(
+            f"SELECT id FROM services WHERE host_id = ? AND state IN "  # noqa: S608
+            f"({', '.join('?' * len(ACTIVE))})",
+            (host_id, *ACTIVE),
+        ):
+            self._failures.pop(row["id"], None)
+            self.wake(row["id"])
 
     def starting_on(self, host_id: str) -> "builtins.list[str]":
         """Services whose start request is on its way to this host right now."""
@@ -394,6 +411,7 @@ class ServiceManager:
         self._connect_failures.pop(sid, None)
         self._reachable.pop(sid, None)
         self._forward_denied.discard(sid)
+        self._host_down.discard(sid)
 
     # -- the reconcile loop -------------------------------------------------------------------
     def start(self) -> None:
@@ -463,7 +481,12 @@ class ServiceManager:
         # Back off a host that keeps failing; otherwise check again in POLL_EVERY.
         failures = 0 if ok else self._failures.get(service_id, 0) + 1
         self._failures[service_id] = failures
-        delay = min(BACKOFF_MAX, POLL_EVERY * 2 ** (failures - 1)) if failures else POLL_EVERY
+        if failures and service_id in self._host_down:
+            delay = min(HOST_WAIT_MAX, HOST_WAIT_START * 2 ** (failures - 1))
+        elif failures:
+            delay = min(BACKOFF_MAX, POLL_EVERY * 2 ** (failures - 1))
+        else:
+            delay = POLL_EVERY
         self._next_at[service_id] = time.monotonic() + delay
 
     async def _advance(self, row: Row) -> bool:
@@ -489,11 +512,15 @@ class ServiceManager:
                 await self._close_forward(row["id"])
                 self._finished(self.get_row(row["id"]))
                 return True
+            # A host down marks it (it is then re-checked by itself, and its services
+            # are woken the moment it is back), like a job finding it down does.
+            self.hosts.note_reachability(row["host_id"], e)
             # Unreachable for now: keep the state, say why, and what this Mac sees.
             self._update(row["id"], error=f"host unreachable: {e}"[:500])
             if row["state"] in SERVING and row["local_port"]:
                 await self._probe(row, force=True)
             return False
+        self.hosts.note_reachability(row["host_id"], None)
         ours: str = FROM_WORKER.get(str(remote.get("state"))) or str(row["state"])
         fields: dict[str, Any] = {
             "remote_state": remote.get("state"),
@@ -544,7 +571,14 @@ class ServiceManager:
             started = await self.worker(row["host_id"], "POST", "/services", json=spec,
                                         headers=headers, timeout=60)  # fmt: skip
         except RunnerError as e:
-            if e.transient or e.code in ("unreachable", "timeout", "not_ready"):
+            self.hosts.note_reachability(row["host_id"], e)  # see _advance
+            if self.hosts.is_down(row["host_id"], e):
+                # The host or this Mac's network is down: wait for it, with backoff.
+                self._host_down.add(row["id"])
+                self._update(row["id"], error=self.hosts.waiting_note(row["host_id"], e))
+                return False
+            self._host_down.discard(row["id"])
+            if e.transient or e.code == "not_ready":
                 self._update(row["id"], error=f"waiting for the host: {e}"[:500])
                 return False
             self._move(row, "failed", error=str(e)[:2000], finished_at=now())
@@ -552,6 +586,8 @@ class ServiceManager:
             return True
         finally:
             self._starting.pop(row["id"], None)
+        self.hosts.note_reachability(row["host_id"], None)
+        self._host_down.discard(row["id"])
         if self.is_leased(row["host_id"]):
             self.on_late_start(row["host_id"], row["id"])  # the timed run's caveat
         moved = self._move(row, "starting", remote_state=started.get("state"),

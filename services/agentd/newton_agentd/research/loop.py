@@ -16,6 +16,14 @@ when their method is new, proposed as experiments; what experiments show is kept
 
 arXiv asks for at most one API request every 3 seconds: the loop keeps to that, and
 reads at most MAX_NEW papers per goal per poll.
+
+Offline (B7): a search that can't reach arXiv leaves last_polled_at alone; the goal gets
+last_poll_error (a sentence) and next_poll_at (5 min, doubling to 1 h while it fails),
+and one 'poll' event per failure streak. While Newton is offline the loop doesn't poll:
+it probes arXiv at most once a minute, and polls the goals that failed once it's back.
+Every poll that couldn't search (no model, no keywords, arXiv out of reach or answering
+badly) is such a failure: only a search that worked sets last_polled_at. A goal that
+failed for want of a model polls on the next pass once the profile has one.
 """
 
 from __future__ import annotations
@@ -33,14 +41,22 @@ import httpx
 from ..config import Settings
 from ..contracts import ExperimentSpec
 from ..errors import Conflict, NotFound
+from ..network import NetworkState
 from ..orchestration.state_machine import RESEARCH_ITEM, ConcurrentTransition, record_event
+from ..runners.base import RunnerError
 from ..storage.db import Database, dumps, loads, new_id, now
-from .papers import ARXIV_API, PaperError, Papers, _get, parse_feed, proposal
+from .papers import ARXIV_API, ArxivUnreachable, PaperError, Papers, parse_feed, proposal
 
 log = logging.getLogger("newton_agentd.loop")
 
 MAX_NEW = 8  # papers triaged per goal per poll
 ARXIV_SPACING = 3.0  # seconds between arXiv API requests
+FIRST_RETRY = 300.0  # a failed poll looks again in 5 min, doubling ...
+LAST_RETRY = 3600.0  # ... up to 1 h, while it keeps failing
+OFFLINE = ("arXiv couldn't be reached (offline?): Newton will look again when the network "
+           "is back")  # fmt: skip
+NO_MODEL = "no model: set default_model in the profile"
+NO_KEYWORDS = "the goal has no keywords to search for: add some so Newton can look for papers"
 TRIAGE = """You triage new papers for a research assistant that tests numerical methods on a
 linear advection benchmark (1D/2D, periodic, finite volume). The user's goal:
 
@@ -54,12 +70,36 @@ a limiter, a time integrator) for advection or hyperbolic conservation laws that
 tried on linear advection, and it serves the goal."""
 
 
+def retry_delay(failures: int) -> float:
+    """How long after the n-th failed poll in a row the loop looks again."""
+    return min(LAST_RETRY, FIRST_RETRY * (1 << min(max(failures - 1, 0), 10)))
+
+
+def failure_code(sentence: str | None) -> str | None:
+    """The code of the failure a goal's last_poll_error says (None: no failure)."""
+    if not sentence:
+        return None
+    return {NO_MODEL: "model", NO_KEYWORDS: "goal", OFFLINE: "offline"}.get(sentence, "arxiv")
+
+
+def next_poll(goal: Any) -> float | None:
+    """When the loop looks again for an active goal: the retry while polls fail, else
+    poll_hours after the last poll that worked (None: never polled, the next pass)."""
+    if goal["status"] != "active":
+        return None
+    if goal["next_poll_at"] is not None:
+        return float(goal["next_poll_at"])
+    if goal["last_polled_at"] is None:
+        return None
+    return float(goal["last_polled_at"]) + float(goal["poll_hours"]) * 3600
+
+
 def search_query(keywords: list[str], categories: list[str]) -> str:
     """arXiv's search syntax from validated words (letters, digits, spaces, .+'-)."""
     words = [k for k in keywords if re.fullmatch(r"[A-Za-z0-9 .+'-]{2,60}", k)]
     cats = [c for c in categories if re.fullmatch(r"[a-z-]+(\.[A-Za-z-]+)?", c)]
     if not words:
-        raise PaperError("the goal has no keywords to search for")
+        raise PaperError(NO_KEYWORDS)
     terms = " OR ".join(f'abs:"{w}"' if " " in w else f"abs:{w}" for w in words)
     query = f"({terms})"
     if cats:
@@ -79,6 +119,11 @@ class ResearchLoop:
         self._task: asyncio.Task[None] | None = None
         self._last_arxiv = 0.0
         self._lock = asyncio.Lock()  # one poll at a time: arXiv's pace, one model
+        self._was_offline = False
+
+    @property
+    def network(self) -> NetworkState:
+        return self.papers.network
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._run(), name="newton-research-loop")
@@ -93,20 +138,94 @@ class ResearchLoop:
         while True:
             try:
                 self.record_findings()
-                for goal in self.due_goals():
-                    await self.poll(goal["id"])
+                await self.poll_due()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 log.exception("research loop pass failed")
             await asyncio.sleep(60)
 
+    async def poll_due(self) -> None:
+        """One pass of the loop: the due goals, unless Newton is offline (then a probe,
+        at most once a minute). Back online: the goals that failed poll right away."""
+        due = self.due_goals()
+        if self.network.is_offline() and (due or self._was_offline):
+            await self.network.probe("arxiv", self._probe)
+        offline = self.network.is_offline()
+        back, self._was_offline = self._was_offline and not offline, offline
+        if back:
+            failed = self.db.query("SELECT * FROM goals WHERE status = 'active' "
+                                   "AND poll_failures > 0")  # fmt: skip
+            due += [dict(g) for g in failed if all(d["id"] != g["id"] for d in due)]
+        # Without a model a poll searches nothing: it isn't waiting for the network.
+        searches = bool(self.profile.get()["default_model"])
+        if searches:  # a model was chosen since: goals that waited for one look now
+            waited = self.db.query("SELECT * FROM goals WHERE status = 'active' "
+                                   "AND last_poll_error = ?", (NO_MODEL,))  # fmt: skip
+            due += [dict(g) for g in waited if all(d["id"] != g["id"] for d in due)]
+        for goal in due:
+            if searches and self.network.is_offline():  # learned this pass: the rest wait
+                self._waiting(goal)
+                continue
+            try:
+                await self.poll(goal["id"])
+            except (RunnerError, PaperError) as e:  # recorded on the goal: last_poll_error
+                log.info("goal %s: %s", goal["id"], e)
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # one goal's failure never keeps the others from polling
+                log.exception("goal %s: poll failed", goal["id"])
+
+    async def _probe(self) -> None:
+        """Any answer from arXiv's API (whatever its status) means it can be reached."""
+        async with self.papers.http_factory() as http:
+            await self._pace()
+            await http.head(ARXIV_API)
+
     def due_goals(self) -> list[dict[str, Any]]:
         t = now()
         return [
             dict(g) for g in self.db.query("SELECT * FROM goals WHERE status = 'active'")
-            if g["last_polled_at"] is None or t - g["last_polled_at"] >= g["poll_hours"] * 3600
+            if (when := next_poll(g)) is None or t >= when
         ]  # fmt: skip
+
+    def _waiting(self, goal: dict[str, Any]) -> None:
+        """A due goal not polled because Newton is offline: the same as a failed poll
+        (error, next_poll_at), without trying arXiv."""
+        self._failed(goal["id"], OFFLINE, "offline")
+
+    def _failed(self, goal_id: str, sentence: str, code: str) -> RunnerError:
+        """Record a poll that couldn't search arXiv: last_polled_at stays, the goal gets
+        the sentence and its next try; one 'poll' event per failure streak. Another
+        reason (offline, then no model) starts a new streak: its own event, 5 min."""
+        with self.db.tx():
+            row = self.db.query_one(
+                "SELECT poll_failures, last_poll_error FROM goals WHERE id = ?", (goal_id,)
+            )
+            same = row is not None and failure_code(row["last_poll_error"]) == code
+            failures = (row["poll_failures"] if row and same else 0) + 1
+            self.db.execute(
+                "UPDATE goals SET last_poll_error = ?, next_poll_at = ?, poll_failures = ? "
+                "WHERE id = ?", (sentence, now() + retry_delay(failures), failures, goal_id),
+            )  # fmt: skip
+            if failures == 1:
+                record_event(self.db, "goal", goal_id, "poll",
+                             {"goal_id": goal_id, "error": sentence, "code": code})  # fmt: skip
+        return RunnerError(sentence, code=code)
+
+    async def _search(self, query: str) -> list[dict[str, Any]]:
+        """arXiv's newest papers for the query. PaperError (a sentence) when it fails."""
+        async with self.papers.http_factory() as http:
+            await self._pace()
+            params = httpx.QueryParams({
+                "search_query": query, "sortBy": "submittedDate",
+                "sortOrder": "descending", "max_results": 25,
+            })  # fmt: skip
+            resp = await self.papers.fetch(http, f"{ARXIV_API}?{params}")
+            self._last_arxiv = time.monotonic()  # a retry inside fetch was a request too
+        if resp.status_code != 200:
+            raise PaperError(f"arXiv's API answered {resp.status_code}")
+        return parse_feed(resp.content)  # a captive portal's page: PaperError
 
     # -- one poll ------------------------------------------------------------------------
     async def poll(self, goal_id: str) -> dict[str, Any]:
@@ -116,26 +235,35 @@ class ResearchLoop:
             goal = self.db.query_one("SELECT * FROM goals WHERE id = ?", (goal_id,))
             if goal is None:
                 raise PaperError(f"unknown goal {goal_id}")
-            self.db.execute("UPDATE goals SET last_polled_at = ? WHERE id = ?", (now(), goal_id))
             model = self.profile.get()["default_model"]
             summary: dict[str, Any] = {"goal_id": goal_id, "found": 0, "new": 0, "relevant": 0,
                                        "dismissed": 0, "carded": 0, "proposed": [],
                                        "skipped": []}  # fmt: skip
-            if not model:
-                summary["error"] = "no model: set default_model in the profile"
-                record_event(self.db, "goal", goal_id, "poll", summary)
+            if not model:  # nothing searched: a failed poll (backs off; a model ends it)
+                self._failed(goal_id, NO_MODEL, "model")
+                summary["error"] = NO_MODEL
                 return summary
-            query = search_query(loads(goal["keywords"]), loads(goal["categories"]))
-            async with self.papers.http_factory() as http:
-                await self._pace()
-                params = httpx.QueryParams({
-                    "search_query": query, "sortBy": "submittedDate",
-                    "sortOrder": "descending", "max_results": 25,
-                })  # fmt: skip
-                resp = await _get(http, f"{ARXIV_API}?{params}")
-                if resp.status_code != 200:
-                    raise PaperError(f"arXiv's API answered {resp.status_code}")
-                found = parse_feed(resp.content)
+            try:
+                query = search_query(loads(goal["keywords"]), loads(goal["categories"]))
+            except PaperError as e:  # the goal itself can't be searched: say so, back off
+                self._failed(goal_id, str(e), "goal")
+                raise
+            try:
+                found = await self._search(query)
+            except ArxivUnreachable as e:  # no answer: offline (or arXiv is)
+                if e.offline or self.network.is_offline():
+                    raise self._failed(goal_id, OFFLINE, "offline") from None
+                raise self._failed(goal_id, self._later(str(e), goal), "arxiv") from None
+            except PaperError as e:  # an answer, not a search result (arXiv busy, a portal)
+                raise self._failed(goal_id, self._later(str(e), goal), "arxiv") from None
+            except Exception as e:  # noqa: BLE001 - e.g. redirects without end, a bad body
+                log.warning("goal %s: arXiv search failed: %r", goal_id, e)
+                reason = f"arXiv's answer couldn't be read ({type(e).__name__})"
+                raise self._failed(goal_id, self._later(reason, goal), "arxiv") from None
+            self.db.execute(
+                "UPDATE goals SET last_polled_at = ?, last_poll_error = NULL, "
+                "next_poll_at = NULL, poll_failures = 0 WHERE id = ?", (now(), goal_id),
+            )  # fmt: skip
             summary["found"] = len(found)
             fresh = [p for p in found if not self.db.query_one(
                 "SELECT 1 FROM research_items WHERE source = 'arxiv' AND external_id = ?",
@@ -145,6 +273,13 @@ class ResearchLoop:
                 await self._one(goal, paper, model, summary)
             record_event(self.db, "goal", goal_id, "poll", summary)
             return summary
+
+    @staticmethod
+    def _later(reason: str, goal: Any) -> str:
+        """An "arxiv" failure's sentence, with when _failed will have the loop look again."""
+        same = failure_code(goal["last_poll_error"]) == "arxiv"
+        minutes = round(retry_delay((goal["poll_failures"] if same else 0) + 1) / 60)
+        return f"{reason}: Newton will look again in {minutes} min"
 
     async def _pace(self) -> None:
         wait = self._last_arxiv + ARXIV_SPACING - time.monotonic()

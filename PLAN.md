@@ -42,7 +42,7 @@ Every milestone ends with `scripts/test.sh` green and STATUS.md updated.
 
 | # | ID | Step | What gets built | Done when |
 |---|---|---|---|---|
-| 10 | B7 | **Demo hardening** | offline/degraded modes, signed build | a demo runs from a clean Mac |
+| 10 | B7 | **Demo hardening** | offline/degraded modes, an offline demo path (recorded demo paper, built-in schemes, readiness), Newton run from a git clone (`scripts/setup.sh`, `scripts/run.sh`); no packaged or signed app (owner decision) | a demo runs from a fresh clone on a clean Mac, offline after setup |
 
 ## Then: using the Mac and the GB10 together (before paper ingestion)
 

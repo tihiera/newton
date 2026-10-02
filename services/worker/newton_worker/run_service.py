@@ -4,8 +4,8 @@ Runs in its own session so it outlives the worker and the SSH tunnel, like
 run_job. It owns status.json from `starting` until a terminal state:
 
   starting  engine process spawned, its HTTP server not up yet
-  loading   server up; preparing the model (ollama: pull, check the pinned
-            digest, load it resident)
+  loading   server up; preparing the model (ollama: pull unless the pinned
+            digest is already in its store, check the digest, load it resident)
   ready     answering; health checked every few seconds (`healthy`)
   draining  the router sends nothing new; stops at drain_until
   stopping  -> stopped    (asked to stop, or drained)
@@ -27,7 +27,7 @@ from typing import Any, Optional
 
 from .fsutil import read_json, write_json_atomic
 from .procs import identity, stop_group
-from .services import GIB, MLX_COMPLETE, gated, mac_gate
+from .services import GIB, MLX_COMPLETE, gated, mac_gate, model_present
 
 # The engine is on 127.0.0.1: never through a proxy from the environment (urllib
 # would send even loopback requests to HTTP_PROXY, and the service never got ready).
@@ -291,15 +291,14 @@ class Supervisor:
         if self.spec["engine"] != "ollama":
             return
         model = self.spec["model"]
-        remaining = max(5.0, deadline - time.time())
-        self.interruptible(
-            self.http, "POST", "/api/pull", {"model": model, "stream": False}, timeout=remaining
-        )
-        self.check_stop()
-        tags = self.http("GET", "/api/tags", timeout=30).get("models") or []
-        entry = self.named(tags)
-        digest = entry.get("digest") if entry else None
-        if not digest or not str(digest).startswith(self.spec["revision"]):
+        # Already in the service's own store at the pinned digest (approved and pulled
+        # before): no pull, so the service starts with no network at all.
+        pinned, entry, digest = self.pinned_digest() if self.stored() else (False, None, None)
+        if not pinned:
+            self.pull(deadline)
+            self.check_stop()
+            pinned, entry, digest = self.pinned_digest()
+        if not pinned:
             if entry:  # don't keep gigabytes of a model nobody approved
                 try:
                     self.http("DELETE", "/api/delete", {"model": model}, timeout=60)
@@ -314,6 +313,37 @@ class Supervisor:
             self.http, "POST", "/api/generate", {"model": model, "keep_alive": -1},
             timeout=remaining,
         )  # fmt: skip
+
+    def stored(self) -> bool:
+        """Is the model's manifest in this service's Ollama store? The service directory
+        is <worker root>/services/<id>, the store <worker root>/models/ollama."""
+        try:
+            return model_present(self.spec, self.dir.parent.parent)
+        except (OSError, ValueError):
+            return False
+
+    def pinned_digest(self) -> tuple[bool, Optional[dict[str, Any]], Any]:
+        """(matches the pinned revision?, the store's entry, its digest), from the
+        engine's own list of local models (no network)."""
+        tags = self.http("GET", "/api/tags", timeout=30).get("models") or []
+        entry = self.named(tags)
+        digest = entry.get("digest") if entry else None
+        return bool(digest) and str(digest).startswith(self.spec["revision"]), entry, digest
+
+    def pull(self, deadline: float) -> None:
+        """Download the model through the engine. A refusal carries Ollama's own words
+        (e.g. the registry can't be reached), never a bare HTTP status."""
+        model = self.spec["model"]
+        remaining = max(5.0, deadline - time.time())
+        try:
+            answer = self.interruptible(
+                self.http, "POST", "/api/pull", {"model": model, "stream": False},
+                timeout=remaining,
+            )  # fmt: skip
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f"ollama couldn't pull {model}: {ollama_error(e)}") from None
+        if isinstance(answer, dict) and answer.get("error"):
+            raise RuntimeError(f"ollama couldn't pull {model}: {str(answer['error'])[:500]}")
 
     def run(self) -> None:
         deadline = time.time() + float(self.spec["startup_timeout_s"])
@@ -363,6 +393,22 @@ class Supervisor:
             self.proc.poll()
             stop_group(self.proc.pid, self.engine_identity, grace=STOP_GRACE)
         self.update(state=state, error=error, finished_at=time.time(), healthy=None)
+
+
+def ollama_error(error: urllib.error.HTTPError) -> str:
+    """Ollama's own message from an error response ({"error": "..."}), else its status."""
+    try:
+        raw = error.read()
+    except OSError:
+        raw = b""
+    text = raw.decode("utf-8", errors="replace").strip()
+    try:
+        body = json.loads(text) if text else None
+    except ValueError:
+        body = None
+    if isinstance(body, dict) and body.get("error"):
+        text = str(body["error"])
+    return (text or f"HTTP {error.code} {error.reason}")[:500]
 
 
 def main() -> None:

@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import shutil
 import subprocess
+import sys
 import tarfile
 from pathlib import Path
 from typing import Any
@@ -55,8 +57,26 @@ def kernel_hashes(benchmarks_dir: Path) -> dict[str, str]:
     return out
 
 
+def _git_usable() -> bool:
+    """On macOS /usr/bin/git is a stub that opens the "install the command line
+    developer tools" dialog when they're missing: only call it once xcode-select
+    names an existing developer directory (asking xcode-select never prompts)."""
+    if sys.platform != "darwin":
+        return shutil.which("git") is not None
+    try:
+        out = subprocess.run(["xcode-select", "-p"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.returncode == 0 and bool(out.stdout.strip()) and Path(out.stdout.strip()).is_dir()
+
+
 def repository_commit(root: Path) -> str | None:
-    """HEAD commit of the resources repo, suffixed with +dirty if modified."""
+    """Commit of Newton's resources (benchmark code), suffixed with +dirty if modified.
+
+    Git only for a checkout (<root>/.git) on a machine with the developer tools, never
+    otherwise (a folder without .git, e.g. a downloaded archive, has none: None)."""
+    if not (root / ".git").exists() or not _git_usable():
+        return None
     try:
         head = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "HEAD"],

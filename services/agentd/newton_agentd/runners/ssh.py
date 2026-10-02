@@ -227,8 +227,22 @@ def classify_ssh_error(stderr: str) -> tuple[str, bool]:
     if "administratively prohibited" in s:
         return "forwarding_denied", False
     if "could not resolve hostname" in s:
-        return "unresolvable", False
-    if "connection refused" in s or "timed out" in s or "no route to host" in s:
+        # Transient: the name may resolve again once this Mac is back online (DNS,
+        # a VPN or Tailscale coming up). Jobs and services wait for it.
+        return "unresolvable", True
+    if any(
+        m in s
+        for m in (
+            "connection refused",
+            "timed out",
+            "no route to host",
+            "network is unreachable",
+            "host is down",
+            # Not "kex_exchange_identification" / "connection reset by peer": OpenSSH
+            # prints those when a ProxyCommand or ProxyJump fails at once too, which
+            # is a config problem (ssh_error), not a host that is down.
+        )
+    ):
         return "unreachable", True
     return "ssh_error", True
 
@@ -893,7 +907,12 @@ class SshRunner(WorkerClientRunner):
         every call."""
         cached = self._restart_error
         if cached is not None and time.monotonic() < self._restart_retry_at:
-            raise RunnerError(str(cached), transient=cached.transient, code=cached.code)
+            # Same cause as the original: whether the host is down (ssh couldn't get
+            # there) or its worker failed (an HTTP error through a working tunnel) is
+            # decided from it (hosts.host_down).
+            raise RunnerError(
+                str(cached), transient=cached.transient, code=cached.code
+            ) from cached.__cause__
         try:
             await self._bootstrap()
         except RunnerError as e:

@@ -8,8 +8,10 @@ import functools
 import logging
 import secrets
 import time
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 from typing import Any
+
+import httpx
 
 from ..config import Settings
 from ..contracts import HostCreate, HostUpdate
@@ -32,8 +34,56 @@ ACTIVE_JOB_STATES = ("submitting", "running", "collecting")
 GPU_AUTO_INTERVAL = 60.0
 GPU_RETRY_AFTER_FAILURE = 24 * 3600.0
 GPU_PRECONDITION_RECHECK = 3600.0
+# Host trouble that says nothing about the work itself: the host, or this Mac's
+# network, is down for now. Queued jobs and approved model services wait for it
+# (never failed for it), and the host is checked again by itself: after 1 min,
+# then doubling up to every 15 min while it stays down. ssh's catch-all "ssh_error" is
+# not one: an ssh config, key or ProxyJump problem says nothing about the host being
+# down, so the work keeps its bounded retry and then fails, saying why. Neither is a
+# remote command running past its time limit ("timeout": a bootstrap stuck on a slow
+# index): ssh failing to connect in time is classified "unreachable" already.
+HOST_DOWN_CODES = ("unreachable", "unresolvable")
+DOWN_REASONS = {
+    "unresolvable": "its name doesn't resolve; is this Mac offline?",
+    "unreachable": "it can't be reached; it may be off, asleep or on another network",
+    "timeout": "it didn't answer in time",
+}
+RECHECK_START = 60.0
+RECHECK_MAX = 900.0
+RECHECK_TIMEOUT = 60.0
 
 log = logging.getLogger("newton_agentd.hosts")
+
+
+def host_down(error: BaseException, kind: str) -> bool:
+    """A reachability failure: wait for the host instead of failing the work.
+
+    Only an SSH host can be "down" (off, asleep, or out of reach while this Mac is
+    offline), and only when getting to it failed: ssh or its tunnel (classified by
+    `classify_ssh_error`, or ssh timing out), or a connection the worker never
+    accepted. A request that reached the worker and then failed (a read timeout, a
+    worker crashing mid-request) is about the work or the worker, not the host:
+    that, and anything on this Mac, keeps the bounded retry."""
+    if kind != "ssh" or not isinstance(error, RunnerError) or error.code not in HOST_DOWN_CODES:
+        return False
+    cause = error.__cause__
+    if isinstance(cause, httpx.HTTPError):
+        return isinstance(cause, (httpx.ConnectError, httpx.ConnectTimeout))
+    return True
+
+
+def down_reason(error: RunnerError) -> str:
+    """Why the host can't be used right now, as a sentence (plus ssh's own words)."""
+    reason = DOWN_REASONS.get(error.code, "it can't be reached")
+    lines = [line.strip() for line in str(error).splitlines() if line.strip()]
+    detail = lines[-1] if lines else ""
+    stripped = True
+    while stripped:
+        stripped = False
+        for prefix in ("tunnel failed:", "ssh:", "could not forward to the worker:"):
+            if detail.lower().startswith(prefix):
+                detail, stripped = detail[len(prefix) :].strip(), True
+    return f"{reason} ({detail[:160]})" if detail else reason
 
 
 class HostNotFound(KeyError):
@@ -84,7 +134,7 @@ class HostKeyUnknown(RunnerError):
 def host_view(row: Row) -> dict[str, Any]:
     out = dict(row)
     out["hardware"] = loads(row["hardware"])
-    out["capabilities"] = capabilities(out["hardware"])
+    out["capabilities"] = capabilities(out["hardware"], local=row["kind"] == "local")
     out["use_venv"] = bool(row["use_venv"])
     out["install_deps"] = bool(row["install_deps"])
     out.pop("token_ref", None)
@@ -103,6 +153,10 @@ class HostService:
         self._gpu_tasks: dict[str, asyncio.Task[dict[str, Any]]] = {}
         self._gpu_status: dict[str, dict[str, Any]] = {}
         self._gpu_last_auto: dict[str, float] = {}
+        # Automatic re-checks of hosts that are down: host -> (failed re-checks, due at).
+        self._recheck: dict[str, tuple[int, float]] = {}
+        self._rechecking: set[str] = set()
+        self._online_listeners: list[Callable[[str], None]] = []
 
     # -- registry -------------------------------------------------------------
     def ensure_local_host(self) -> None:
@@ -277,14 +331,94 @@ class HostService:
         if error is None:
             if row["status"] != "online":
                 self._update(host_id, status="online", last_error=None, last_checked_at=now())
+                self._came_online(host_id)
             elif now() - (row["last_checked_at"] or 0) > 60:
                 self._update(host_id, last_checked_at=now())
-        elif (
-            error is not None
-            and error.code in ("unreachable", "timeout", "ssh_error")
-            and (row["status"] == "online")
+        elif row["status"] == "online" and (
+            host_down(error, row["kind"]) or error.code == "ssh_error"
         ):
+            # ssh_error isn't "down" (nothing waits for it, nor is it re-checked by
+            # itself), but auto placement mustn't trust this host until it works again.
             self._update(host_id, status=f"error:{error.code}", last_error=str(error))
+
+    def is_down(self, host_id: str, error: BaseException) -> bool:
+        """`host_down` for this host (its kind decides: this Mac is never "down")."""
+        row = self.get_row(host_id, missing_ok=True, include_deleted=True)
+        return row is not None and host_down(error, row["kind"])
+
+    def waiting_note(self, host_id: str, error: RunnerError) -> str:
+        """What a job or service waiting on a down host shows: "waiting for <host>: why"."""
+        row = self.get_row(host_id, missing_ok=True, include_deleted=True)
+        name = row["name"] if row is not None else host_id
+        if row is not None and row["kind"] == "local":  # never "off, asleep, ..." here
+            return f"waiting for {name}'s worker: {error}"[:500]
+        return f"waiting for {name}: {down_reason(error)}"[:500]
+
+    # -- automatic re-checks of hosts that are down ---------------------------------
+    def add_online_listener(self, listener: Callable[[str], None]) -> None:
+        """Called with a host id whenever a host comes back online (work waiting on it
+        is retried now instead of at the end of its backoff)."""
+        self._online_listeners.append(listener)
+
+    def _came_online(self, host_id: str) -> None:
+        self._recheck.pop(host_id, None)
+        for listener in list(self._online_listeners):
+            try:
+                listener(host_id)
+            except Exception:
+                log.exception("online listener failed for host %s", host_id)
+
+    def recheck_down_hosts(self) -> None:
+        """Run every scheduler tick. An SSH host that worked before and is now in a
+        reachability error is checked again by itself, after 1 min, then 2, 4, 8 and
+        every 15 min while it stays down, so it comes back online without anyone
+        pressing Check. Other errors (host key, login, config) wait for the user."""
+        marks = ", ".join("?" * len(HOST_DOWN_CODES))
+        rows = self.db.query(
+            "SELECT id FROM hosts WHERE kind = 'ssh' AND hardware IS NOT NULL "  # noqa: S608
+            f"AND status IN ({marks})",
+            tuple(f"error:{code}" for code in HOST_DOWN_CODES),
+        )
+        down = {row["id"] for row in rows}
+        for host_id in list(self._recheck):
+            if host_id not in down and host_id not in self._rechecking:
+                self._recheck.pop(host_id, None)  # back online, deleted, or needs the user
+        t = time.monotonic()
+        for host_id in down:
+            failures, due = self._recheck.setdefault(host_id, (0, t + RECHECK_START))
+            if t < due or host_id in self._rechecking:
+                continue
+            # The next due time is set before the check runs: however this one ends
+            # (even with an error nobody expected), it can't run again before then.
+            self._recheck[host_id] = (failures + 1, t + self._recheck_delay(failures + 1))
+            self._rechecking.add(host_id)
+            self._spawn(self._recheck_one(host_id), f"newton-recheck-{host_id}")
+
+    @staticmethod
+    def _recheck_delay(failures: int) -> float:
+        return float(min(RECHECK_START * 2**failures, RECHECK_MAX))
+
+    def _recheck_failed(self, host_id: str) -> float:
+        """Count the failed re-check from when it ended (a check can take a minute)."""
+        failures = self._recheck.get(host_id, (1, 0.0))[0]
+        delay = self._recheck_delay(failures)
+        self._recheck[host_id] = (failures, time.monotonic() + delay)
+        return delay
+
+    async def _recheck_one(self, host_id: str) -> None:
+        try:
+            await asyncio.wait_for(self.check(host_id), RECHECK_TIMEOUT)
+        except (RunnerError, HostNotFound, TimeoutError) as e:
+            delay = self._recheck_failed(host_id)
+            log.info("host %s still down (%s); next check in %.0f s", host_id, e, delay)
+            return
+        except Exception:  # e.g. the keychain refused the worker token: back off all the same
+            delay = self._recheck_failed(host_id)
+            log.exception("re-check of host %s failed; next check in %.0f s", host_id, delay)
+            return
+        finally:
+            self._rechecking.discard(host_id)
+        record_event(self.db, "host", host_id, "back_online", {"by": "automatic re-check"})
 
     def _update(self, host_id: str, **fields: Any) -> None:
         fields["updated_at"] = now()
@@ -382,7 +516,8 @@ class HostService:
     # -- operations -----------------------------------------------------------
     async def check(self, host_id: str) -> dict[str, Any]:
         """Connectivity + worker health + hardware; persisted on the host row."""
-        self.get_row(host_id)  # 404 for unknown or deleted hosts
+        before = self.get_row(host_id)  # 404 for unknown or deleted hosts
+        assert before is not None
         try:
             runner = await self.runner(host_id)
             retry_now = getattr(runner, "retry_now", None)
@@ -408,6 +543,8 @@ class HostService:
             last_checked_at=now(),
         )
         record_event(self.db, "host", host_id, "checked", {"gpus": len(hardware.get("gpus", []))})
+        if before["status"] != "online":
+            self._came_online(host_id)
         return self.get(host_id)
 
     async def ensure_checked(self, host_id: str) -> None:

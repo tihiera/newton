@@ -193,9 +193,16 @@ def test_downloads_need_approval(client: TestClient, monkeypatch: pytest.MonkeyP
 
 
 def test_a_host_that_cannot_take_it_refuses_up_front(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Set before agentd starts: it starts this Mac's worker at once (to check it), and
+    # the worker reads the reserve from its environment.
     monkeypatch.setenv("NEWTON_SERVICE_RESERVE_GB", "100000")  # nothing fits
+    with TestClient(create_app(settings), headers=AUTH) as client:
+        refuses_up_front(client)
+
+
+def refuses_up_front(client: TestClient) -> None:
     r = client.post("/services", json={"host_id": "local", "name": "x", "settings": FAKE})
     assert r.status_code == 409 and "not enough memory" in r.json()["error"]
     assert client.get("/services").json() == []  # nothing was created

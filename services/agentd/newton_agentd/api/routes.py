@@ -11,7 +11,7 @@ from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
-from .. import __version__
+from .. import __version__, runtime_check
 from ..connectors.oauth import PAGE_HEADERS, callback_page
 from ..connectors.publish import PublishError
 from ..context import AppContext
@@ -31,9 +31,12 @@ from ..contracts import (
 from ..errors import NotFound
 from ..orchestration import jobs as jobs_mod
 from ..orchestration.state_machine import record_event
+from ..readiness import readiness as readiness_view
 from ..reporting.export import export as export_report
+from ..research import library as library_mod
 from ..research import schemes as schemes_mod
 from ..research.experiment_design import BENCHMARKS
+from ..research.loop import next_poll
 from ..research.papers import PaperError
 from ..runners.ssh_config import list_config_hosts
 from ..serving.router import PATHS as ROUTER_PATHS
@@ -66,7 +69,17 @@ async def health(request: Request) -> dict[str, Any]:
         "db": {"ok": db_ok, "schema_version": ctx.db.schema_version(), "path": str(ctx.db.path)},
         "scheduler": {"running": ctx.settings.start_scheduler, "ticks": ctx.scheduler.ticks},
         "uptime_seconds": time.time() - ctx.started_at,
+        "network": _network_snapshot(ctx),
+        "runtime": runtime_check.check(ctx.settings),
     }
+
+
+def _network_snapshot(ctx: AppContext) -> dict[str, Any]:
+    network = getattr(ctx, "network", None)
+    if network is None:
+        return {"state": "unknown", "since": None, "detail": None}
+    snapshot: dict[str, Any] = network.snapshot()
+    return snapshot
 
 
 @router.get("/events")
@@ -90,6 +103,13 @@ async def events(
         (*params, limit),
     )
     return [{**r, "data": loads(r["data"])} for r in rows]
+
+
+@router.get("/readiness")
+async def readiness(request: Request) -> dict[str, Any]:
+    """What this Mac can do now (engine, CPU, Metal, reader, network, GPU box, Keychain),
+    as sentences, from cached state only: no network call, no Keychain read."""
+    return readiness_view(ctx_of(request))
 
 
 # -- hosts ---------------------------------------------------------------------
@@ -264,8 +284,12 @@ async def ssh_config_hosts(request: Request) -> list[dict[str, Any]]:
 
 
 def _goal_view(row: dict[str, Any]) -> dict[str, Any]:
-    return {**row, "keywords": loads(row["keywords"]), "categories": loads(row["categories"]),
-            "auto_propose": bool(row["auto_propose"])}  # fmt: skip
+    """A goal, with last_poll_error (the failing poll's sentence, or null) and next_poll_at
+    (when the loop looks again: sooner while polls fail; null when paused or never polled)."""
+    out = {**row, "keywords": loads(row["keywords"]), "categories": loads(row["categories"]),
+           "auto_propose": bool(row["auto_propose"]), "next_poll_at": next_poll(row)}  # fmt: skip
+    out.pop("poll_failures", None)
+    return out
 
 
 @router.get("/goals")
@@ -315,6 +339,11 @@ async def update_goal(request: Request, goal_id: str, body: GoalUpdate) -> dict[
             fields[listed] = dumps(fields[listed])
     if "auto_propose" in fields:
         fields["auto_propose"] = int(fields["auto_propose"])
+    if fields.keys() & {"keywords", "categories", "poll_hours"} or fields.get("status") == "active":
+        # What to search for, how often, or a resume: the old poll's error and backoff
+        # no longer hold. The goal is due on the loop's next pass (or poll_hours after
+        # its last search that worked).
+        fields.update(last_poll_error=None, next_poll_at=None, poll_failures=0)
     if fields:
         fields["updated_at"] = now()
         assignments = ", ".join(f"{k} = :{k}" for k in fields)
@@ -359,6 +388,28 @@ async def create_experiment(request: Request, body: ExperimentSpec) -> dict[str,
     else:
         await ctx.hosts.refresh_stale_online()  # don't place on a host that went away
     return ctx.experiments.create(body)
+
+
+class LibraryExperimentRequest(BaseModel):
+    goal_id: str | None = None
+    candidates: list[str] = Field(min_length=1, max_length=7,
+                                  description="library scheme names (GET /schemes)")  # fmt: skip
+    baseline: str = "upwind"
+    initial_condition: Literal["sine", "gaussian", "square"] = "sine"
+    host_id: str = "auto"
+    backend: str = "auto"
+
+
+@router.post("/experiments/library", status_code=201)
+async def create_library_experiment(request: Request,
+                                    body: LibraryExperimentRequest) -> dict[str, Any]:  # fmt: skip
+    """Built-in schemes against a baseline, awaiting approval: no paper needed."""
+    ctx = ctx_of(request)
+    spec = ExperimentSpec.model_validate(library_mod.library_proposal(
+        ctx.settings.benchmarks_dir, ctx.db, body.candidates, body.baseline,
+        body.initial_condition, body.host_id, body.backend, body.goal_id,
+    ))  # fmt: skip
+    return await create_experiment(request, spec)
 
 
 @router.get("/experiments/{exp_id}")
@@ -655,7 +706,9 @@ async def propose_experiment(request: Request, item_id: str,
 
 @router.post("/goals/{goal_id}/poll")
 async def poll_goal(request: Request, goal_id: str) -> dict[str, Any]:
-    """Look for new papers for this goal now (the loop does it every poll_hours)."""
+    """Look for new papers for this goal now (the loop does it every poll_hours).
+    arXiv out of reach: 502 code offline (or arxiv when it answered badly); the goal keeps
+    last_polled_at and gets last_poll_error and next_poll_at."""
     await get_goal(request, goal_id)
     try:
         return await ctx_of(request).loop.poll(goal_id)
@@ -794,3 +847,13 @@ async def publish(request: Request, exp_id: str, body: PublishRequest) -> dict[s
 @router.get("/publications")
 async def publications(request: Request, experiment_id: str | None = None) -> list[dict[str, Any]]:
     return ctx_of(request).publisher.list(experiment_id)
+
+
+@router.post("/publications/{pub_id}/retry")
+async def retry_publication(request: Request, pub_id: str) -> dict[str, Any]:
+    """Send a failed publication again, without a new approval, when its approved text is
+    unchanged (sha256). 409 not_failed / content_changed otherwise."""
+    try:
+        return ctx_of(request).publisher.retry(pub_id)
+    except KeyError:
+        raise NotFound(f"unknown publication {pub_id}") from None

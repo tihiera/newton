@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .. import runtime_check
+
 BACKEND_PREFERENCE = ("cuda", "metal", "cpu")
 # Below this many cells an Apple GPU loses to numpy (launch overhead; measured on an
 # M3 Max the crossover is ~16k-131k cells for these 1D schemes), so "auto" only
@@ -12,8 +14,33 @@ BACKEND_PREFERENCE = ("cuda", "metal", "cpu")
 METAL_MIN_CELLS = 65_536
 
 
-def capabilities(hardware: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
-    """{backend: {"ok": bool, "device"?: str, "reason"?: str}} for cpu/cuda/metal."""
+def capabilities(hardware: dict[str, Any] | None, local: bool = False) -> dict[str, dict[str, Any]]:
+    """{backend: {"ok": bool, "device"?: str, "reason"?: str}} for cpu/cuda/metal.
+
+    `local`: this Mac, whose jobs run on agentd's own interpreter: cpu needs numpy
+    there, and metal also needs what this runtime can see (MLX, macOS 14+)."""
+    caps = _from_probe(hardware)
+    if local:
+        _gate_local(caps)
+    return caps
+
+
+def _gate_local(caps: dict[str, dict[str, Any]]) -> None:
+    numpy_ok = runtime_check.numpy_available()
+    if not numpy_ok:
+        caps["cpu"] = {**caps["cpu"], "ok": False, "reason": runtime_check.NUMPY_MISSING}
+    problem = runtime_check.metal_problem()
+    if problem is not None:
+        device = caps["metal"].get("device")
+        if device and problem == runtime_check.MLX_MISSING:
+            problem = f"{device} found, but MLX is missing from Newton's runtime"
+        caps["metal"] = {**caps["metal"], "ok": False, "reason": problem}
+    elif not numpy_ok and caps["metal"].get("ok"):
+        # Metal jobs import numpy too (the solver, its backends): MLX alone can't run them.
+        caps["metal"] = {**caps["metal"], "ok": False, "reason": runtime_check.NUMPY_MISSING}
+
+
+def _from_probe(hardware: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     if not hardware:
         unknown = {"ok": False, "reason": "host not checked yet"}
         return {"cpu": {"ok": True}, "cuda": dict(unknown), "metal": dict(unknown)}
@@ -137,7 +164,13 @@ def place(
         for host in (local + remote) if b == "cpu" else candidates:
             if usable(host, b):
                 return host, b, f"auto: {b} on {host['name']}"
+    # Under "auto", a host's cpu is named only when it is itself broken (this Mac
+    # without numpy); an explicit cpu request always says why each host refused.
     reasons = "; ".join(
-        f"{h['name']}: {why_not(h, b)}" for h in candidates for b in wanted if b != "cpu"
+        f"{h['name']}: {why_not(h, b)}"
+        for h in candidates
+        for b in wanted
+        if b != "cpu" or backend == "cpu" or not h["capabilities"]["cpu"]["ok"]
     )
-    raise PlacementError(f"no connected host can run {backend}: {reasons}")
+    what = "this experiment" if backend == "auto" else backend
+    raise PlacementError(f"no connected host can run {what}: {reasons}")
