@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
-import type { CandidateVerdict, Job, ValidationReport } from "../../api";
-import { candidateOf, claimOutcome, convergenceSeries, decades, experimentsFor, headline, jobsMissingRuns, leadVerdict, stepOf } from "./view";
+import { AgentdError, type CandidateVerdict, type Job, type ResearchItem, type ValidationReport } from "../../api";
+import {
+  canPropose,
+  candidateOf,
+  claimOutcome,
+  convergenceSeries,
+  decades,
+  experimentsFor,
+  headline,
+  jobsMissingRuns,
+  leadVerdict,
+  memoryConflict,
+  proposeBody,
+  proposeOpen,
+  shownExperiment,
+  stepOf,
+} from "./view";
 
 const verdict = (evidence: CandidateVerdict["evidence"], failed: string[] = [], label = "vl"): CandidateVerdict => ({
   label,
@@ -93,5 +108,89 @@ describe("experimentsFor", () => {
       { id: "3", research_item_id: "p", created_at: 3 },
     ];
     expect(experimentsFor(list, "p").map((e) => e.id)).toEqual(["3", "1"]);
+  });
+  it("keeps a stable order within the same second", () => {
+    const list = [
+      { id: "exp_a", research_item_id: "p", created_at: 5 },
+      { id: "exp_c", research_item_id: "p", created_at: 5 },
+      { id: "exp_b", research_item_id: "p", created_at: 4 },
+    ];
+    expect(experimentsFor(list, "p").map((e) => e.id)).toEqual(["exp_c", "exp_a", "exp_b"]);
+    expect(experimentsFor([...list].reverse(), "p").map((e) => e.id)).toEqual(["exp_c", "exp_a", "exp_b"]);
+  });
+});
+
+describe("canPropose", () => {
+  const ir = { scheme_ir: { name: "muscl" } } as unknown as ResearchItem["data"];
+  it("takes carded and reported papers with a scheme", () => {
+    expect(canPropose({ state: "carded", data: ir })).toBe(true);
+    expect(canPropose({ state: "reported", data: ir })).toBe(true);
+  });
+  it("not while an experiment is under way, nor without a scheme", () => {
+    expect(canPropose({ state: "experiment_planned", data: ir })).toBe(false);
+    expect(canPropose({ state: "executing", data: ir })).toBe(false);
+    expect(canPropose({ state: "reported", data: { scheme_ir: null } })).toBe(false);
+  });
+});
+
+describe("shownExperiment", () => {
+  const mine = [{ id: "new" }, { id: "old" }];
+  it("shows the latest unless another one was picked", () => {
+    expect(shownExperiment(mine, null)?.id).toBe("new");
+    expect(shownExperiment(mine, "old")?.id).toBe("old");
+  });
+  it("falls back to the latest when the picked one is gone", () => {
+    expect(shownExperiment(mine, "gone")?.id).toBe("new");
+    expect(shownExperiment([], null)).toBeUndefined();
+  });
+});
+
+describe("memoryConflict", () => {
+  const err = (status: number, code: string | undefined, body: Record<string, unknown> = {}) =>
+    new AgentdError("http", String(body.error ?? "nope"), { status, code, body: { ...body, code } });
+  it("reads agentd's 409 already_tested verbatim, with the experiment it names", () => {
+    const e = err(409, "already_tested", { error: "the same scheme was tested in exp_1 (yellow)", experiment_id: "exp_1" });
+    expect(memoryConflict(e)).toEqual({
+      code: "already_tested",
+      message: "the same scheme was tested in exp_1 (yellow)",
+      experimentId: "exp_1",
+      researchItemId: undefined,
+    });
+  });
+  it("reads already_planned with the paper it names", () => {
+    const e = err(409, "already_planned", { error: "the same scheme is already planned (from ri_2)", research_item_id: "ri_2" });
+    expect(memoryConflict(e)?.researchItemId).toBe("ri_2");
+    expect(memoryConflict(e)?.message).toBe("the same scheme is already planned (from ri_2)");
+  });
+  it("leaves every other error alone", () => {
+    expect(memoryConflict(err(409, "bad_state"))).toBeNull();
+    expect(memoryConflict(err(422, "already_tested"))).toBeNull();
+    expect(memoryConflict(new Error("already_tested"))).toBeNull();
+    expect(memoryConflict(undefined)).toBeNull();
+  });
+});
+
+describe("proposeBody", () => {
+  const choice = { baseline: "muscl_vanleer", initial_condition: "gaussian", host_id: "auto", backend: "cpu" };
+  it("sends what the form shows", () => {
+    expect(proposeBody(choice)).toEqual(choice);
+    expect(proposeBody(choice)).not.toHaveProperty("retest");
+  });
+  it("re-sends the current choice with retest, not the refused body", () => {
+    // Refused with upwind; the user switched to van Leer, then "Propose anyway".
+    expect(proposeBody(choice, true)).toEqual({ ...choice, retest: true });
+  });
+});
+
+describe("proposeOpen", () => {
+  const ir = { scheme_ir: { name: "muscl" } } as unknown as ResearchItem["data"];
+  const reported = { id: "ri_1", state: "reported", data: ir } as const;
+  it("stays open for the paper it was opened for", () => {
+    expect(proposeOpen("ri_1", reported)).toBe(true);
+    expect(proposeOpen(null, reported)).toBe(false);
+  });
+  it("closes on another paper, or once agentd no longer takes a propose", () => {
+    expect(proposeOpen("ri_1", { ...reported, id: "ri_2" })).toBe(false);
+    expect(proposeOpen("ri_1", { ...reported, state: "experiment_planned" })).toBe(false);
   });
 });

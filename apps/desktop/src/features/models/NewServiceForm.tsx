@@ -1,7 +1,7 @@
 // Run a model on a machine: POST /services with typed settings. agentd decides if it
 // fits (409 says why not) and whether it needs approval (a download does).
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, type Approval, type Host, type Service } from "../../api";
 import { useNav } from "../../app/navigation";
 import { useAction } from "../../hooks/useAction";
@@ -31,13 +31,10 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
   onClose: () => void;
 }) {
   const nav = useNav();
-  const [form, setForm] = useState<Form>(() => ({ ...EMPTY, host_id: hosts?.find((h) => h.kind === "ssh")?.id ?? hosts?.[0]?.id ?? "" }));
+  const [form, setForm] = useState<Form>(EMPTY);
   const [created, setCreated] = useState<{ service: Service; approval: Approval | null } | null>(null);
-  useEffect(() => {
-    if (!form.host_id && hosts?.length) {
-      setForm((f) => ({ ...f, host_id: hosts.find((h) => h.kind === "ssh")?.id ?? hosts[0].id }));
-    }
-  }, [hosts, form.host_id]);
+  // Until the user picks one: the first SSH machine (a GPU box), else the first machine.
+  const hostId = form.host_id || (hosts?.find((h) => h.kind === "ssh")?.id ?? hosts?.[0]?.id ?? "");
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const create = useAction(async () => {
@@ -50,7 +47,7 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
       parallel: numberOrUndefined(form.parallel),
     };
     for (const k of Object.keys(settings)) if (settings[k] === undefined) delete settings[k];
-    const service = await api.services.create({ host_id: form.host_id, name: form.name.trim(), settings });
+    const service = await api.services.create({ host_id: hostId, name: form.name.trim(), settings });
     let approval: Approval | null = null;
     if (service.state === "awaiting_approval") {
       const pending = await api.approvals.pending();
@@ -121,7 +118,7 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
       </div>
       <div className="form-grid">
         <Field label="Machine" error={fe("host_id")}>
-          <select className="select" value={form.host_id} onChange={set("host_id")}>
+          <select className="select" value={hostId} onChange={set("host_id")}>
             {(hosts ?? []).map((h) => (
               <option key={h.id} value={h.id}>{h.name}</option>
             ))}
@@ -161,7 +158,7 @@ export function NewServiceForm({ hosts, onCreated, onClose }: {
       </div>
       {otherError ? <ErrorNote error={err} /> : null}
       <div className="row" style={{ marginTop: 6 }}>
-        <button className="btn primary" type="submit" disabled={create.busy || !form.host_id}>
+        <button className="btn primary" type="submit" disabled={create.busy || !hostId}>
           {create.busy ? <Spinner /> : null}
           Create service
         </button>

@@ -213,3 +213,6 @@
   align-items: center;
   gap: 14px;
 }
+.new-research .field-error {
+  white-space: pre-line; /* one line per offending list item */
+}

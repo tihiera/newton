@@ -24,6 +24,9 @@ export interface AgentdErrorInfo {
   fields?: Record<string, string>;
   /** 409 when a host key isn't trusted yet: the keys to show the user. */
   fingerprints?: HostKeyFingerprint[];
+  /** The whole `{error, code, ...}` body, for the extra fields some errors carry
+   *  (e.g. `experiment_id` on a 409 `already_tested`). */
+  body?: Record<string, unknown>;
 }
 
 /** One host key as agentd reports it: `{type: "ssh-ed25519", fingerprint: "SHA256:…"}`. */
@@ -47,6 +50,7 @@ export class AgentdError extends Error {
   readonly path?: string;
   readonly fields: Record<string, string>;
   readonly fingerprints?: HostKeyFingerprint[];
+  readonly body?: Record<string, unknown>;
 
   constructor(kind: AgentdErrorKind, message: string, info: AgentdErrorInfo | number = {}) {
     super(message);
@@ -58,6 +62,7 @@ export class AgentdError extends Error {
     this.path = i.path;
     this.fields = i.fields ?? {};
     this.fingerprints = i.fingerprints;
+    this.body = i.body;
   }
 
   /** The connection itself is down (vs one request failing). */
@@ -80,12 +85,25 @@ export function parseErrorBody(status: number, body: unknown, fallback: string):
     const b = body as Record<string, unknown>;
     if (Array.isArray(b.detail)) {
       const fields: Record<string, string> = {};
+      const fromItem = new Set<string>(); // list names whose message came from an item
       const lines: string[] = [];
       for (const raw of b.detail as ValidationItem[]) {
         const loc = (raw.loc ?? []).filter((p) => p !== "body");
-        const field = loc.length ? String(loc[loc.length - 1]) : "";
+        // A list item (`keywords.1`) is filed under its list's name, so the input that
+        // holds the list shows it, and under its full path, so the item can be named.
+        const named = loc.filter((p) => typeof p !== "number" && !/^\d+$/.test(String(p)));
+        const field = named.length ? String(named[named.length - 1]) : "";
+        const path = loc.join(".");
         const msg = String(raw.msg ?? "invalid value").replace(/^Value error, /, "");
-        if (field && !(field in fields)) fields[field] = msg;
+        // A list item has an index in its path; a nested field (settings.memory_gb) doesn't.
+        const isItem = loc.some((p) => typeof p === "number" || /^\d+$/.test(String(p)));
+        // The list's own error wins over one copied from an item.
+        if (field && (!(field in fields) || (!isItem && fromItem.has(field)))) {
+          fields[field] = msg;
+          if (isItem) fromItem.add(field);
+          else fromItem.delete(field);
+        }
+        if (path && isItem && !(path in fields)) fields[path] = msg;
         lines.push(field ? `${loc.join(".")}: ${msg}` : msg);
       }
       return { status, fields, message: lines.join("; ") || fallback };
@@ -100,6 +118,7 @@ export function parseErrorBody(status: number, body: unknown, fallback: string):
       return {
         status,
         message: err,
+        body: b,
         code: typeof b.code === "string" ? b.code : undefined,
         fingerprints: hostKeys(b.fingerprints),
       };

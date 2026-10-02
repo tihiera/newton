@@ -19,8 +19,8 @@ export function PaperInbox() {
 
   const goal = nav.goalId ? goals.data?.find((g) => g.id === nav.goalId) : undefined;
   const title = nav.goalId === null ? "All papers" : goal?.title ?? "Research papers";
-  const items = papers.data ?? [];
-  const shown = useMemo(() => items.filter((it) => matchesQuery(it, query)), [items, query]);
+  const items = papers.data;
+  const shown = useMemo(() => (items ?? []).filter((it) => matchesQuery(it, query)), [items, query]);
   const addPaper = () => nav.open({ kind: "ingest", goalId: nav.goalId });
 
   if (nav.inboxCollapsed) {
@@ -86,7 +86,7 @@ export function PaperInbox() {
           </div>
         ) : papers.error && papers.data === undefined ? (
           <div className="inbox-empty small">{papers.error.message}</div>
-        ) : items.length === 0 ? (
+        ) : !items?.length ? (
           <div className="inbox-empty">
             <span className="icon-tile round lavender">
               <Icon name="paper" size={24} />

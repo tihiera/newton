@@ -1,13 +1,27 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main window: core APIs plus the agentd connection command (base URL + bearer token).",
+  "description": "Main window: core APIs, the agentd connection command (base URL + bearer token), saving a downloaded file through a native save dialog, and opening a few known sites in the browser. No filesystem or dialog permission is exposed to the webview.",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
     "allow-agentd-connection",
-    "core:window:allow-start-dragging"
+    "allow-save-file",
+    "core:window:allow-start-dragging",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://arxiv.org/*" },
+        { "url": "https://www.arxiv.org/*" },
+        { "url": "https://export.arxiv.org/*" },
+        { "url": "https://doi.org/*" },
+        { "url": "https://gist.github.com/*" },
+        { "url": "https://github.com/*" },
+        { "url": "https://www.notion.so/*" },
+        { "url": "https://notion.so/*" }
+      ]
+    }
   ]
 }

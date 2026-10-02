@@ -1,22 +1,15 @@
 // Create a research goal: what to look for on arXiv and how often.
 
 import { useState, type FormEvent } from "react";
-import { api, type GoalCreate } from "../../api";
+import { AgentdError, api, type GoalCreate } from "../../api";
 import { useNav } from "../../app/navigation";
 import { Icon } from "../../components/Icon";
-import { ErrorNote, Field, fieldError, Modal, Spinner, Switch } from "../../components/ui";
+import { ErrorNote, Field, fieldError, formError, Modal, Spinner, Switch } from "../../components/ui";
 import { useAction } from "../../hooks/useAction";
+import { listErrors, listKeys, splitList } from "./fieldItems";
 import "./goals.css";
 
 const DEFAULT_CATEGORIES = "physics.comp-ph, math.NA, physics.flu-dyn";
-
-/** "a, b,, c" -> ["a", "b", "c"] */
-function splitList(text: string): string[] {
-  return text
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
 
 const create = (body: GoalCreate) => api.goals.create(body);
 
@@ -29,18 +22,25 @@ export function NewResearchDialog({ onClose }: { onClose: () => void }) {
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [pollHours, setPollHours] = useState("24");
   const [autoPropose, setAutoPropose] = useState(true);
+  // The lists as sent, so a 422 on `keywords.1` quotes the item even after more typing.
+  const [sent, setSent] = useState<Record<"keywords" | "categories", string[]>>({ keywords: [], categories: [] });
   const action = useAction(create);
   const err = action.error;
   const fe = (name: string) => fieldError(err, name);
+  const fields = err instanceof AgentdError ? err.fields : {};
+  // One line per offending item, under the input that holds the list.
+  const le = (name: "keywords" | "categories") => listErrors(fields, name, sent[name]).join("\n") || undefined;
+  const shown = ["title", "description", "poll_hours", ...listKeys(fields, "keywords"), ...listKeys(fields, "categories")];
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim() || action.busy) return;
+    const lists = { keywords: splitList(keywords), categories: splitList(categories) };
+    setSent(lists);
     const goal = await action.run({
       title: title.trim(),
       description: description.trim(),
-      keywords: splitList(keywords),
-      categories: splitList(categories),
+      ...lists,
       poll_hours: pollHours.trim() ? Number(pollHours) : undefined,
       auto_propose: autoPropose,
     });
@@ -50,11 +50,11 @@ export function NewResearchDialog({ onClose }: { onClose: () => void }) {
   };
 
   // A 422 on a field under Advanced keeps that section open so the message shows.
-  const advancedError = Boolean(fe("categories") || fe("poll_hours") || fe("auto_propose"));
+  const advancedError = Boolean(le("categories") || fe("poll_hours") || fe("auto_propose"));
 
   return (
     <Modal onClose={onClose} label="New research">
-      <form onSubmit={submit}>
+      <form className="new-research" onSubmit={submit}>
         <div className="modal-body mesh-header stack" style={{ gap: 18 }}>
           <span className="icon-tile round">
             <Icon name="folder" size={24} />
@@ -87,9 +87,9 @@ export function NewResearchDialog({ onClose }: { onClose: () => void }) {
             />
           </Field>
 
-          <Field label="Keywords" error={fe("keywords")} hint="Comma separated, e.g. flux limiter, TVD scheme">
+          <Field label="Keywords" error={le("keywords")} hint="Comma separated, e.g. flux limiter, TVD scheme">
             <input
-              className={`input ${fe("keywords") ? "invalid" : ""}`}
+              className={`input ${le("keywords") ? "invalid" : ""}`}
               value={keywords}
               onChange={(e) => setKeywords(e.target.value)}
               placeholder="flux limiter, TVD scheme"
@@ -110,9 +110,9 @@ export function NewResearchDialog({ onClose }: { onClose: () => void }) {
 
           {advanced || advancedError ? (
             <div className="stack" style={{ gap: 16 }}>
-              <Field label="arXiv categories" error={fe("categories")} hint="Comma separated">
+              <Field label="arXiv categories" error={le("categories")} hint="Comma separated">
                 <input
-                  className={`input ${fe("categories") ? "invalid" : ""}`}
+                  className={`input ${le("categories") ? "invalid" : ""}`}
                   value={categories}
                   onChange={(e) => setCategories(e.target.value)}
                 />
@@ -138,7 +138,7 @@ export function NewResearchDialog({ onClose }: { onClose: () => void }) {
             </div>
           ) : null}
 
-          {err ? <ErrorNote error={err} /> : null}
+          {formError(err, shown) ? <ErrorNote error={err} /> : null}
         </div>
         <div className="modal-foot">
           <span className="spacer" />

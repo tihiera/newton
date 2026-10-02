@@ -1,14 +1,16 @@
 // A paper without an experiment: the propose card when the card mapped onto
-// Newton's IR and the paper is carded; otherwise agentd's own reason.
+// Newton's IR and agentd takes proposals for the paper (carded or reported);
+// otherwise agentd's own reason.
 
 import type { ResearchItem } from "../../api";
 import { Icon } from "../../components/Icon";
 import { Note, StateChip } from "../../components/ui";
 import { ProposeCard } from "./ProposeCard";
+import { canPropose } from "./view";
 
 export function NoExperiment({ item }: { item: ResearchItem }) {
   const d = item.data;
-  if (d.scheme_ir && item.state === "carded") return <ProposeCard item={item} />;
+  if (canPropose(item)) return <ProposeCard item={item} />;
 
   return (
     <div className="card soft ex-none">

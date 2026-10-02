@@ -1,6 +1,8 @@
 // A reported experiment (mockup 04): agentd's evidence and summary, the headline
 // metrics, the convergence plot, every verdict's checks, variants and provenance.
+// `next` sits right under the evidence: the paper's "New experiment".
 
+import type { ReactNode } from "react";
 import type { Experiment, ValidationReport } from "../../api";
 import { Icon } from "../../components/Icon";
 import { ConvergencePanel } from "./ConvergencePanel";
@@ -9,7 +11,7 @@ import { Provenance } from "./Provenance";
 import { Verdicts } from "./Verdicts";
 import { headline, leadVerdict } from "./view";
 
-export function ReportedView({ exp, report }: { exp: Experiment; report: ValidationReport }) {
+export function ReportedView({ exp, report, next }: { exp: Experiment; report: ValidationReport; next?: ReactNode }) {
   const evidence = report.evidence ?? exp.evidence ?? "unknown";
   const verdict = leadVerdict(report);
   return (
@@ -25,6 +27,7 @@ export function ReportedView({ exp, report }: { exp: Experiment; report: Validat
       </div>
       <MetricTiles report={report} verdict={verdict} />
       <ConvergencePanel jobs={exp.jobs ?? []} />
+      {next}
       <Verdicts verdicts={report.verdicts} />
       <Provenance report={report} />
     </div>

@@ -1,12 +1,17 @@
+import { useMemo } from "react";
 import { api, type ResearchItem } from "../../api";
-import { useGoals } from "../../app/data";
+import { useExperiments, useGoals } from "../../app/data";
 import { useNav } from "../../app/navigation";
+import { saveFile } from "../../app/platform";
 import { useAction } from "../../hooks/useAction";
+import { ExternalLink } from "../../components/ExternalLink";
 import { Icon } from "../../components/Icon";
 import { Chip, ErrorNote, Spinner, StateChip } from "../../components/ui";
-import { paperSubline, paperTitle } from "./format";
+import { experimentsFor } from "../experiments/view";
+import { exportFileName, latestReported, paperSubline, paperTitle } from "./format";
 
-/** Mockup 02's header: back link, big title, sub line, state and claim chips. */
+/** Mockup 02's header: back link, big title, sub line, state and claim chips; the
+ *  export of the newest reported experiment (mockup 06) and the link to arXiv. */
 export function PaperHeader({ item }: { item: ResearchItem }) {
   const nav = useNav();
   const goals = useGoals();
@@ -15,6 +20,10 @@ export function PaperHeader({ item }: { item: ResearchItem }) {
   const url = item.data.paper?.url || `https://arxiv.org/abs/${item.external_id}`;
   // agentd retries a failed paper when it is ingested again (same item, fresh read).
   const retry = useAction(() => api.research.ingest({ ref: item.external_id, goal_id: item.goal_id }));
+  const experiments = useExperiments();
+  const reported = useMemo(() => latestReported(experimentsFor(experiments.data ?? [], item.id)), [experiments.data, item.id]);
+  // The user picks where the zip goes in the shell's save dialog (null: cancelled).
+  const exporter = useAction(async (id: string, name: string) => saveFile(name, await api.experiments.exportZip(id)));
 
   return (
     <div className="mesh-header pw-head">
@@ -44,18 +53,23 @@ export function PaperHeader({ item }: { item: ResearchItem }) {
             Read again
           </button>
         ) : null}
-        <a
-          className="icon-btn outlined"
-          href={url}
-          target="_blank"
-          rel="noreferrer noopener"
-          aria-label="Open on arXiv"
-          title="Open on arXiv"
-        >
-          <Icon name="share" size={18} />
-        </a>
+        {reported ? (
+          <button
+            className="btn"
+            disabled={exporter.busy}
+            onClick={() => void exporter.run(reported.id, exportFileName(reported))}
+            title="Save the newest report, its data and figures as a zip"
+          >
+            {exporter.busy ? <Spinner /> : <Icon name="share" size={16} />}
+            Export
+          </button>
+        ) : null}
+        <ExternalLink className="icon-btn outlined" href={url} aria-label="Open on arXiv" title="Open on arXiv">
+          <Icon name="link" size={18} />
+        </ExternalLink>
       </div>
       {retry.error ? <ErrorNote error={retry.error} /> : null}
+      {exporter.error ? <ErrorNote error={exporter.error} /> : null}
     </div>
   );
 }

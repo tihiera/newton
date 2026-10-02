@@ -12,14 +12,12 @@ const MAX_CHARS = 400_000; // keep the tail of very long logs
 
 export function useJobLogs(jobId: string, stream: "stdout" | "stderr", enabled: boolean, finished: boolean) {
   const visible = useVisible();
-  const [text, setText] = useState("");
-  const offset = useRef(0);
+  // Each log (job + stream) keeps its own text and read position, so switching between
+  // stdout and stderr resumes each where it was: never re-read, never shown twice.
+  const key = `${jobId}:${stream}`;
+  const [texts, setTexts] = useState<Record<string, string>>({});
+  const offsets = useRef(new Map<string, number>());
   const failures = useRef(0);
-
-  useEffect(() => {
-    setText("");
-    offset.current = 0;
-  }, [jobId, stream]);
 
   useEffect(() => {
     if (!enabled || !visible) return;
@@ -29,11 +27,11 @@ export function useJobLogs(jobId: string, stream: "stdout" | "stderr", enabled: 
     const tick = async () => {
       let caughtUp = false;
       try {
-        const chunk = await api.jobs.logs(jobId, stream, offset.current, controller.signal);
+        const chunk = await api.jobs.logs(jobId, stream, offsets.current.get(key) ?? 0, controller.signal);
         if (!alive) return;
         failures.current = 0;
-        if (chunk.data) setText((t) => (t + chunk.data).slice(-MAX_CHARS));
-        offset.current = chunk.next_offset;
+        if (chunk.data) setTexts((t) => ({ ...t, [key]: ((t[key] ?? "") + chunk.data).slice(-MAX_CHARS) }));
+        offsets.current.set(key, chunk.next_offset);
         caughtUp = chunk.size !== undefined ? chunk.next_offset >= chunk.size : !chunk.data;
       } catch (err) {
         if (!alive || (err instanceof DOMException && err.name === "AbortError")) return;
@@ -48,7 +46,7 @@ export function useJobLogs(jobId: string, stream: "stdout" | "stderr", enabled: 
       controller.abort();
       clearTimeout(timer);
     };
-  }, [jobId, stream, enabled, visible, finished]);
+  }, [jobId, stream, key, enabled, visible, finished]);
 
-  return text;
+  return texts[key] ?? "";
 }

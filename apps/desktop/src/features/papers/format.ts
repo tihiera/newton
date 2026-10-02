@@ -1,7 +1,7 @@
 // How a research item reads in lists and headers. Presentation only: every value
 // comes from the item agentd returned; nothing here decides anything scientific.
 
-import type { ResearchItem, SchemeIR } from "../../api";
+import type { Experiment, ResearchItem, SchemeIR } from "../../api";
 
 /** The year an arXiv id was submitted: "2401.12345" -> 2024, "math/0501001" -> 2005. */
 export function arxivYear(id: string | null | undefined): string | null {
@@ -34,15 +34,68 @@ export function authorList(item: ResearchItem, max = 3): string | null {
   return authors.length > max ? `${authors.slice(0, max).join(", ")} et al.` : authors.join(", ");
 }
 
-/** The inbox meta line: first author (or the first category) · year. */
-export function paperMeta(item: ResearchItem): string {
-  const who = firstAuthor(item) ?? item.data.paper?.categories?.[0] ?? "arXiv";
-  return [who, paperYear(item)].filter(Boolean).join(" · ");
+/** arXiv's journal reference as the authors wrote it, whitespace tidied; null if none. */
+export function journalRef(item: ResearchItem): string | null {
+  const ref = item.data.paper?.journal_ref?.replace(/\s+/g, " ").trim();
+  return ref || null;
 }
 
-/** The header sub line: arXiv id · year · authors. */
+/** The year after a journal reference, unless the reference already gives one
+ *  ("J. Comput. Phys. 231 (2012)" reads badly followed by "· 2011"). */
+function yearAfter(ref: string | null, item: ResearchItem): string | null {
+  return ref && /\b(19|20)\d{2}\b/.test(ref) ? null : paperYear(item);
+}
+
+/** The inbox meta line: the journal (else the first author, else the first category) · year. */
+export function paperMeta(item: ResearchItem): string {
+  const journal = journalRef(item);
+  const who = journal ?? firstAuthor(item) ?? item.data.paper?.categories?.[0] ?? "arXiv";
+  return [who, yearAfter(journal, item)].filter(Boolean).join(" · ");
+}
+
+/** The header sub line: arXiv id · journal · year · authors. */
 export function paperSubline(item: ResearchItem): string {
-  return [`arXiv ${item.external_id}`, paperYear(item), authorList(item)].filter(Boolean).join(" · ");
+  const journal = journalRef(item);
+  return [`arXiv ${item.external_id}`, journal, yearAfter(journal, item), authorList(item)]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export interface DoiLink {
+  doi: string;
+  url: string;
+}
+
+/** The DOIs arXiv gave ("10.1016/j.jcp.2012.01.001"), each with its resolver link. A
+ *  DOI never holds whitespace: several separated by spaces (an article and its
+ *  erratum) are several DOIs, each linked on its own. */
+export function doiLinks(item: ResearchItem): DoiLink[] {
+  const field = item.data.paper?.doi?.trim();
+  if (!field) return [];
+  return field.split(/\s+/).flatMap((raw) => {
+    const doi = raw.replace(/^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:)/i, "");
+    if (!doi) return [];
+    return [{ doi, url: `https://doi.org/${doi.split("/").map(encodeURIComponent).join("/")}` }];
+  });
+}
+
+/** The newest reported experiment among a paper's (newest first, as experimentsFor sorts). */
+export function latestReported<T extends Pick<Experiment, "state">>(mine: ReadonlyArray<T>): T | undefined {
+  return mine.find((e) => e.state === "reported");
+}
+
+/** The name suggested for an experiment's export: "<title slug>-<experiment id>.zip". */
+export function exportFileName(exp: Pick<Experiment, "id" | "title">): string {
+  const slug = exp.title
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/, "");
+  const id = exp.id.replace(/[^A-Za-z0-9_-]+/g, "-");
+  return `${slug || "experiment"}-${id}.zip`;
 }
 
 export function paperTitle(item: ResearchItem): string {
@@ -137,8 +190,3 @@ export function yesNo(v: boolean | null | undefined): string {
 
 /** States in which agentd is still reading the paper. */
 export const READING_STATES = new Set(["discovered", "triaged", "extracting"]);
-
-/** The Propose button's condition: a mapped scheme on a carded paper. */
-export function canPropose(item: ResearchItem): boolean {
-  return Boolean(item.data.scheme_ir) && item.state === "carded";
-}

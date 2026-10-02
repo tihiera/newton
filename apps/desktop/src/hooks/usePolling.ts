@@ -5,7 +5,7 @@
 //   - after the connection fails, waits longer each time (up to 30 s);
 //   - re-reads at once when /events reports a change (EventsProvider's revision).
 
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useEffectEvent, useState } from "react";
 import { AgentdError } from "../api";
 import { RevisionContext } from "./revision";
 import { useVisible } from "./useVisibility";
@@ -29,6 +29,11 @@ export interface PollOptions {
 
 export const MAX_BACKOFF = 30_000;
 
+/** Same subject: the deps are the same values, in order. */
+export function sameDeps(a: ReadonlyArray<unknown>, b: ReadonlyArray<unknown>): boolean {
+  return a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
+}
+
 export function nextDelay(interval: number, failures: number): number {
   if (failures === 0) return interval;
   return Math.min(MAX_BACKOFF, Math.max(interval, 2000) * 2 ** (failures - 1));
@@ -45,40 +50,42 @@ export function usePolling<T>(
   const [error, setError] = useState<AgentdError | Error>();
   const [loading, setLoading] = useState(enabled);
   const [kick, setKick] = useState(0);
-  const fetcherRef = useRef(fetcher);
-  fetcherRef.current = fetcher;
-  const failures = useRef(0);
+  // The latest fetcher, without restarting the loop each render.
+  const fetchNow = useEffectEvent((signal: AbortSignal) => fetcher(signal));
 
-  // A new subject (deps) starts clean: no stale data from the previous one.
-  useEffect(() => {
+  // A new subject (deps) starts clean: no stale data from the previous one. Adjusted
+  // while rendering (not in an effect), so the old subject's data never shows.
+  const [subject, setSubject] = useState(deps);
+  if (!sameDeps(subject, deps)) {
+    setSubject(deps);
     setData(undefined);
     setError(undefined);
-    failures.current = 0;
-  }, deps); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   useEffect(() => {
     if (!enabled || !visible) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let alive = true;
+    let failures = 0; // consecutive failures of this loop: the backoff
 
     const tick = async () => {
       setLoading(true);
       try {
-        const value = await fetcherRef.current(controller.signal);
+        const value = await fetchNow(controller.signal);
         if (!alive) return;
-        failures.current = 0;
+        failures = 0;
         setData(value);
         setError(undefined);
       } catch (err) {
         if (!alive || (err instanceof DOMException && err.name === "AbortError")) return;
-        failures.current += 1;
+        failures += 1;
         setError(err instanceof Error ? err : new Error(String(err)));
       } finally {
         if (alive) setLoading(false);
       }
       if (alive && interval > 0) {
-        timer = setTimeout(tick, nextDelay(interval, failures.current));
+        timer = setTimeout(tick, nextDelay(interval, failures));
       }
     };
     void tick();

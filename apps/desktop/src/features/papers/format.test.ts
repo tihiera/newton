@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { ResearchItem } from "../../api";
 import {
   arxivYear,
-  canPropose,
   correctionText,
   countByState,
+  doiLinks,
+  exportFileName,
+  journalRef,
+  latestReported,
   matchesQuery,
   paperMeta,
   paperSubline,
@@ -64,6 +67,55 @@ describe("meta lines", () => {
       "arXiv 2401.12345 · 2023 · Ada Lovelace, Alan Turing, Emmy Noether et al.",
     );
   });
+  it("shows the journal when arXiv has one", () => {
+    const journal = { ...paper, journal_ref: "Journal of Computational\n  Physics" };
+    expect(journalRef(item({}, { paper: journal }))).toBe("Journal of Computational Physics");
+    expect(paperMeta(item({}, { paper: journal }))).toBe("Journal of Computational Physics · 2023");
+    expect(paperSubline(item({}, { paper: journal }))).toBe(
+      "arXiv 2401.12345 · Journal of Computational Physics · 2023 · Ada Lovelace, Alan Turing, Emmy Noether et al.",
+    );
+    // A reference that carries its own year isn't followed by arXiv's.
+    const dated = { ...paper, journal_ref: "J. Comput. Phys. 231 (2012) 1234-1250" };
+    expect(paperMeta(item({}, { paper: dated }))).toBe("J. Comput. Phys. 231 (2012) 1234-1250");
+    expect(paperMeta(item({}, { paper: { ...paper, journal_ref: "  " } }))).toBe("Ada Lovelace et al. · 2023");
+    expect(paperMeta(item({}, { paper: { ...paper, journal_ref: null } }))).toBe("Ada Lovelace et al. · 2023");
+  });
+});
+
+describe("doi", () => {
+  const doi = (value: string | null | undefined) => doiLinks(item({}, { paper: { ...paper, doi: value } }));
+  it("links to the resolver", () => {
+    expect(doiLinks(item({}, { paper }))).toEqual([]);
+    expect(doi("  ")).toEqual([]);
+    expect(doi("10.1016/j.jcp.2012.01.001")).toEqual([
+      { doi: "10.1016/j.jcp.2012.01.001", url: "https://doi.org/10.1016/j.jcp.2012.01.001" },
+    ]);
+    expect(doi("https://doi.org/10.1137/0721062")).toEqual([
+      { doi: "10.1137/0721062", url: "https://doi.org/10.1137/0721062" },
+    ]);
+    expect(doi("10.1002/(SICI)1097#x")[0].url).toBe("https://doi.org/10.1002/(SICI)1097%23x");
+  });
+  it("links each of several DOIs on its own", () => {
+    // arXiv's <arxiv:doi> for an article and its erratum.
+    expect(doi("10.1103/PhysRevLett.104.251301 10.1103/PhysRevLett.105.029901")).toEqual([
+      { doi: "10.1103/PhysRevLett.104.251301", url: "https://doi.org/10.1103/PhysRevLett.104.251301" },
+      { doi: "10.1103/PhysRevLett.105.029901", url: "https://doi.org/10.1103/PhysRevLett.105.029901" },
+    ]);
+  });
+});
+
+describe("export", () => {
+  it("names the zip after the experiment", () => {
+    expect(exportFileName({ id: "exp-1a2b", title: "Schéma TVD: MUSCL vs upwind (CFL 0.8)" })).toBe(
+      "schema-tvd-muscl-vs-upwind-cfl-0-8-exp-1a2b.zip",
+    );
+    expect(exportFileName({ id: "exp/../x", title: "∆∆" })).toBe("experiment-exp-x.zip");
+  });
+  it("picks the newest reported experiment", () => {
+    const mine = [{ id: "c", state: "executing" }, { id: "b", state: "reported" }, { id: "a", state: "reported" }] as const;
+    expect(latestReported(mine)?.id).toBe("b");
+    expect(latestReported([{ state: "failed" }])).toBeUndefined();
+  });
 });
 
 describe("search", () => {
@@ -112,14 +164,5 @@ describe("provenance", () => {
     const rows = provenanceRows({ host: "spark", model: "llama3.2:3b", "request-id": "req-1", extra: { a: 1 }, zeta: "z" });
     expect(rows.map((r) => r.key)).toEqual(["model", "host", "request-id", "zeta"]);
     expect(rows[2].label).toBe("Router request");
-  });
-});
-
-describe("propose gate", () => {
-  it("needs a mapped scheme on a carded paper", () => {
-    const ir = { name: "x", flux: { limiter: "none", correction: null }, time: { method: "one_step" as const }, claims: { order: 1, max_cfl: 1, tvd: false } };
-    expect(canPropose(item({ state: "carded" }, { scheme_ir: ir }))).toBe(true);
-    expect(canPropose(item({ state: "experiment_planned" }, { scheme_ir: ir }))).toBe(false);
-    expect(canPropose(item({ state: "carded" }, { scheme_ir: null }))).toBe(false);
   });
 });

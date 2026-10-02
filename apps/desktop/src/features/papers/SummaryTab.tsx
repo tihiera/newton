@@ -1,14 +1,17 @@
 import type { ResearchItem } from "../../api";
+import { ExternalLink } from "../../components/ExternalLink";
 import { Icon } from "../../components/Icon";
 import { stateLabel } from "../../components/labels";
 import { when } from "../../components/time";
 import { Chip, ErrorNote, Note, Spinner } from "../../components/ui";
-import { READING_STATES } from "./format";
+import { doiLinks, journalRef, READING_STATES } from "./format";
 
 /** The card summary, triage, reading state, abstract and where the text came from. */
 export function SummaryTab({ item }: { item: ResearchItem }) {
   const { card, paper, triage, text } = item.data;
   const reading = READING_STATES.has(item.state);
+  const journal = journalRef(item);
+  const dois = doiLinks(item);
 
   return (
     <div className="pw-grid">
@@ -82,6 +85,25 @@ export function SummaryTab({ item }: { item: ResearchItem }) {
           <div className="pw-prov-grid" style={{ marginTop: 0 }}>
             <span className="k">arXiv</span>
             <span className="v">{item.external_id}</span>
+            {journal ? (
+              <>
+                <span className="k">Journal</span>
+                <span className="v">{journal}</span>
+              </>
+            ) : null}
+            {dois.length ? (
+              <>
+                <span className="k">{dois.length > 1 ? "DOIs" : "DOI"}</span>
+                <span className="v">
+                  {dois.map((d, i) => (
+                    <span key={`${i}:${d.doi}`}>
+                      {i ? " " : null}
+                      <ExternalLink href={d.url}>{d.doi}</ExternalLink>
+                    </span>
+                  ))}
+                </span>
+              </>
+            ) : null}
             {paper?.published ? (
               <>
                 <span className="k">Published</span>

@@ -1,14 +1,24 @@
 // "Publish report" (mockup 06): choose where; nothing is sent until the
 // publish_report approval is approved in the review dialog that opens next.
 
-import { useCallback, useState } from "react";
-import { api, type Experiment } from "../../api";
+import { useCallback, useEffect, useState } from "react";
+import { api, type Experiment, type NotionPage } from "../../api";
 import { useNav } from "../../app/navigation";
 import { Icon } from "../../components/Icon";
 import { ErrorNote, EvidenceBadge, Field, Modal, Note, Spinner } from "../../components/ui";
 import { useAction } from "../../hooks/useAction";
 import { usePolling } from "../../hooks/usePolling";
-import { connectorOf, missingInput, publishRequest, type Choice } from "./destination";
+import {
+  closeListOnEscape,
+  connectorOf,
+  missingInput,
+  needsPageSearch,
+  pageListHint,
+  publishRequest,
+  takePageAnswer,
+  type Choice,
+  type PageList,
+} from "./destination";
 import "./publishing.css";
 
 const CHOICES: Array<{ id: Choice; icon: string; title: string; sub: string }> = [
@@ -98,15 +108,8 @@ export function PublishDialog({ experiment, onClose }: { experiment: Pick<Experi
               <input className="input" placeholder="owner/name" value={repo} onChange={(e) => setRepo(e.target.value)} />
             </Field>
           ) : null}
-          {choice === "notion" ? (
-            <Field label="Parent page" hint="The parent page's id: 32 hexadecimal characters.">
-              <input
-                className="input mono"
-                placeholder="0123456789abcdef0123456789abcdef"
-                value={page}
-                onChange={(e) => setPage(e.target.value)}
-              />
-            </Field>
+          {choice === "notion" && connected ? (
+            <ParentPagePicker page={page} onPage={setPage} />
           ) : null}
           {connectors.error ? <ErrorNote error={connectors.error} /> : null}
           {connectors.data && !connected ? (
@@ -145,5 +148,148 @@ export function PublishDialog({ experiment, onClose }: { experiment: Pick<Experi
         </button>
       </div>
     </Modal>
+  );
+}
+
+const PAGE_ID_HINT = "The parent page's id: 32 hexadecimal characters.";
+
+/** The Notion parent page: picked from the pages the integration can see, or pasted
+ *  as an id for one it can't list. agentd validates either. */
+function ParentPagePicker({ page, onPage }: { page: string; onPage: (id: string) => void }) {
+  const [pasting, setPasting] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<NotionPage>();
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const pages = usePolling(
+    async (signal) => ({ query: debounced, pages: await api.connectors.notionPages(debounced, signal) }),
+    [debounced],
+    { interval: 0, followEvents: false, enabled: !pasting },
+  );
+  // The last answer stays on screen while a new search loads; `listed` counts the
+  // unfiltered list (it decides whether to offer search at all).
+  const [list, setList] = useState<PageList>({});
+  // Each answer is taken in once, while rendering (no effect, no flash of the old list).
+  const [taken, setTaken] = useState<typeof pages.data>();
+  if (pages.data && pages.data !== taken) {
+    setTaken(pages.data);
+    setList(takePageAnswer(list, pages.data, debounced));
+  }
+  const { shown, listed } = list;
+  const hint = pageListHint(list);
+  const selected = picked && picked.id === page ? picked : shown?.find((p) => p.id === page);
+
+  const pick = (p: NotionPage) => {
+    setPicked(p);
+    onPage(p.id);
+    setOpen(false);
+  };
+  const togglePaste = () => {
+    setPasting(!pasting);
+    setOpen(false);
+  };
+
+  if (pasting) {
+    return (
+      <div className="stack" style={{ gap: 6 }}>
+        <Field label="Parent page" hint={PAGE_ID_HINT}>
+          <input
+            className="input mono"
+            placeholder="0123456789abcdef0123456789abcdef"
+            value={page}
+            onChange={(e) => onPage(e.target.value)}
+          />
+        </Field>
+        <button type="button" className="pub-switch" onClick={togglePaste}>
+          Choose from your Notion pages
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <div className="field">
+        <span className="field-label" id="pub-parent-label">Parent page</span>
+        <button
+          type="button"
+          className={`select pub-page-select ${open ? "open" : ""}`}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-labelledby="pub-parent-label"
+          onClick={() => setOpen(!open)}
+        >
+          <Icon name="notion" size={18} />
+          <span className={`pub-page-title ${selected ? "" : "muted"}`}>
+            {selected ? (
+              <>
+                {selected.icon ? <span className="pub-page-icon">{selected.icon}</span> : null}
+                {selected.title}
+              </>
+            ) : page.trim() ? (
+              <span className="mono">{page.trim()}</span>
+            ) : (
+              "Choose a page"
+            )}
+          </span>
+          <Icon name="chevronDown" size={16} />
+        </button>
+      </div>
+      {open ? (
+        <div className="pub-pages">
+          {needsPageSearch(listed ?? 0, query) ? (
+            <label className="search pub-pages-search">
+              <Icon name="search" size={16} />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search Notion pages"
+                aria-label="Search Notion pages"
+                onKeyDown={(e) => closeListOnEscape(e, () => setOpen(false))}
+              />
+              {pages.loading ? <Spinner size={14} /> : null}
+            </label>
+          ) : null}
+          {shown === undefined && pages.loading ? (
+            <div className="pub-pages-hint small muted">
+              <Spinner size={14} /> Loading your Notion pages
+            </div>
+          ) : null}
+          {shown && shown.length > 0 ? (
+            <div className="pub-pages-list" role="listbox" aria-label="Notion pages">
+              {shown.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="option"
+                  aria-selected={p.id === page}
+                  className={`pub-page ${p.id === page ? "selected" : ""}`}
+                  onClick={() => pick(p)}
+                >
+                  <span className="pub-page-icon">{p.icon ?? <Icon name="notion" size={15} />}</span>
+                  <span className="pub-page-title">{p.title}</span>
+                  {p.id === page ? <Icon name="check" size={14} /> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {hint === "no_match" ? (
+            <div className="pub-pages-hint small muted">No page matches that search.</div>
+          ) : null}
+        </div>
+      ) : null}
+      {hint === "share" ? (
+        <Note icon="link">Share the page with your Notion integration, then reopen.</Note>
+      ) : null}
+      {pages.error ? <ErrorNote error={pages.error} /> : null}
+      <button type="button" className="pub-switch" onClick={togglePaste}>
+        Paste a page id instead
+      </button>
+    </div>
   );
 }

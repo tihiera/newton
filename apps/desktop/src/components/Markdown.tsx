@@ -3,6 +3,7 @@
 // bold, italics, links, and images (loaded through an authenticated `loadImage`).
 
 import { useEffect, useState, type ReactNode } from "react";
+import { ExternalLink } from "./ExternalLink";
 
 type ImageLoader = (src: string) => Promise<Blob>;
 
@@ -30,9 +31,9 @@ function inline(text: string, key: string): ReactNode[] {
       const safe = /^https?:\/\//.test(href ?? "");
       out.push(
         safe ? (
-          <a key={k} href={href} target="_blank" rel="noreferrer">
+          <ExternalLink key={k} href={href}>
             {label}
-          </a>
+          </ExternalLink>
         ) : (
           <span key={k}>{label}</span>
         ),

@@ -17,6 +17,7 @@ import type {
   Job,
   LibraryScheme,
   LogChunk,
+  NotionPage,
   PollSummary,
   Profile,
   Publication,
@@ -56,7 +57,15 @@ export function createApi(c: AgentdClient = agentd) {
         post<ResearchItem>("/research/ingest", body),
       propose: (
         id: string,
-        body: { host_id?: string; backend?: string; baseline?: string; initial_condition?: string } = {},
+        body: {
+          host_id?: string;
+          backend?: string;
+          baseline?: string;
+          initial_condition?: string;
+          /** Run it although the same scheme was already tested (agentd answers 409
+           *  `already_tested` / `already_planned` otherwise). */
+          retest?: boolean;
+        } = {},
       ) => post<Experiment>(`/research/items/${id}/propose`, body),
       findings: (goalId?: string | null, signal?: AbortSignal) =>
         get<Finding[]>("/findings", { goal_id: goalId ?? undefined }, signal),
@@ -70,6 +79,8 @@ export function createApi(c: AgentdClient = agentd) {
       cancel: (id: string) => post<Experiment>(`/experiments/${id}/cancel`),
       report: (id: string) => c.text(`/experiments/${id}/report`),
       reportFile: (id: string, path: string) => c.blob(`/experiments/${id}/report/files/${path}`),
+      /** The report as a zip: report.md, report.json (the ValidationReport) and its figures. */
+      exportZip: (id: string) => c.blob(`/experiments/${id}/export`),
     },
     jobs: {
       list: (experimentId: string, signal?: AbortSignal) =>
@@ -136,6 +147,8 @@ export function createApi(c: AgentdClient = agentd) {
       connect: (target: "github" | "notion", token: string) =>
         c.request<Connectors>(`/connectors/${target}`, { method: "PUT", body: { token } }),
       importGh: () => post<Connectors>("/connectors/github/import-gh"),
+      notionPages: (query?: string, signal?: AbortSignal) =>
+        get<NotionPage[]>("/connectors/notion/pages", { query: query || undefined }, signal),
       disconnect: (target: "github" | "notion") =>
         c.request<Connectors>(`/connectors/${target}`, { method: "DELETE" }),
     },

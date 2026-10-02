@@ -3,12 +3,77 @@
 .ex-tab {
   gap: 18px;
 }
-.ex-picker {
-  gap: 6px;
+.ex-not-latest {
+  gap: 8px;
+  padding: 2px 4px 2px 14px;
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
 }
-.ex-picker .btn {
-  padding: 7px 14px;
+.ex-not-latest .btn {
+  padding: 6px 14px;
   font-size: 13px;
+}
+
+/* a paper's earlier experiments: one compact row each */
+.ex-earlier {
+  padding: 12px 14px;
+}
+.ex-earlier-head {
+  margin: 0 4px 6px;
+}
+.ex-earlier-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ex-earlier-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.ex-earlier-row:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+.ex-earlier-row.selected {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.85);
+}
+.ex-earlier-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.ex-earlier-time {
+  flex: none;
+  min-width: 72px;
+  text-align: right;
+}
+
+/* "New experiment" under the evidence, and scientific memory's warning */
+.ex-new {
+  padding: 12px 24px;
+  font-size: 15px;
+}
+.ex-memory {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.ex-memory-actions {
+  justify-content: flex-end;
+  gap: 8px;
 }
 .ex-detail {
   gap: 18px;

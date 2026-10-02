@@ -151,6 +151,9 @@ export interface PaperMeta {
   published: string;
   categories: string[];
   url: string;
+  /** arXiv's journal reference, when the authors gave one ("J. Comput. Phys. 231 (2012)"). */
+  journal_ref?: string | null;
+  doi?: string | null;
 }
 
 export interface PaperCard {
@@ -510,6 +513,14 @@ export interface RouterCredentials {
 export interface Connectors {
   github: boolean;
   notion: boolean;
+}
+
+/** A Notion page the connected integration can write under (GET /connectors/notion/pages). */
+export interface NotionPage {
+  id: string;
+  title: string;
+  url: string | null;
+  icon: string | null;
 }
 
 export type PublicationState =

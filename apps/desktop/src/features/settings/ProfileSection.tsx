@@ -1,7 +1,7 @@
 // The local profile: the name Newton shows, the reader model, and the Mac models
 // switch. Only changed fields are sent (PATCH /profile).
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, type Profile } from "../../api";
 import { useAction } from "../../hooks/useAction";
 import { Icon } from "../../components/Icon";
@@ -14,13 +14,12 @@ export function ProfileSection({ profile, refresh }: { profile: Profile | undefi
   const [loaded, setLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    if (profile && !loaded) {
-      setName(profile.display_name ?? "");
-      setModel(profile.default_model ?? "");
-      setLoaded(true);
-    }
-  }, [profile, loaded]);
+  // The form starts from the profile once it has arrived (then it's the user's).
+  if (profile && !loaded) {
+    setName(profile.display_name ?? "");
+    setModel(profile.default_model ?? "");
+    setLoaded(true);
+  }
 
   const changes: { display_name?: string | null; default_model?: string | null } = {};
   if (profile && name.trim() !== (profile.display_name ?? "")) changes.display_name = name.trim() || null;

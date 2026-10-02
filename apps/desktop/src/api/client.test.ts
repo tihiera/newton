@@ -139,7 +139,35 @@ describe("agentd client", () => {
     const err = await caught(client.request("/goals", { method: "POST", body: {} }));
     expect(err.status).toBe(422);
     expect(err.fields.title).toBe("String should have at least 1 character");
-    expect(err.fields["0"]).toBe("bad keyword");
+    // A list item is filed under its list (the input) and under its full path.
+    expect(err.fields.keywords).toBe("bad keyword");
+    expect(err.fields["keywords.0"]).toBe("bad keyword");
+    expect(err.fields["0"]).toBeUndefined();
+  });
+
+  it("files a nested (non-list) field under its own name only", async () => {
+    const body = { detail: [{ loc: ["body", "settings", "memory_gb"], msg: "Input should be less than or equal to 1024" }] };
+    const client = createAgentdClient({ invoke: invokeOk(), fetch: vi.fn<FetchFn>(async () => json(body, 422)) });
+    const err = await caught(client.request("/services", { method: "POST", body: {} }));
+    expect(err.fields).toEqual({ memory_gb: "Input should be less than or equal to 1024" });
+  });
+
+  it("lets a list's own 422 win over one copied from an item", async () => {
+    const body = { detail: [{ loc: ["body", "keywords", 2], msg: "bad keyword" },
+                            { loc: ["body", "keywords"], msg: "List should have at most 10 items" }] };
+    const client = createAgentdClient({ invoke: invokeOk(), fetch: vi.fn<FetchFn>(async () => json(body, 422)) });
+    const err = await caught(client.request("/goals", { method: "POST", body: {} }));
+    expect(err.fields.keywords).toBe("List should have at most 10 items");
+    expect(err.fields["keywords.2"]).toBe("bad keyword");
+  });
+
+  it("keeps the whole body of {error, code, ...} errors", async () => {
+    const body = { error: "the same scheme was tested in exp-1 (yellow)", code: "already_tested", experiment_id: "exp-1" };
+    const client = createAgentdClient({ invoke: invokeOk(), fetch: vi.fn<FetchFn>(async () => json(body, 409)) });
+    const err = await caught(client.request("/research/items/p/propose", { method: "POST", body: {} }));
+    expect(err.code).toBe("already_tested");
+    expect(err.message).toBe("the same scheme was tested in exp-1 (yellow)");
+    expect(err.body?.experiment_id).toBe("exp-1");
   });
 
   it("keeps host-key fingerprints from a 409 and reads router-style errors", async () => {

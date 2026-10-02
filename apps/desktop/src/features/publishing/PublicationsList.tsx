@@ -4,6 +4,7 @@
 import { api, type Publication } from "../../api";
 import { useApprovals } from "../../app/data";
 import { useNav } from "../../app/navigation";
+import { ExternalLink } from "../../components/ExternalLink";
 import { Icon } from "../../components/Icon";
 import { Note, StateChip } from "../../components/ui";
 import { when } from "../../components/time";
@@ -27,9 +28,9 @@ function PublicationRow({ pub, approvalId }: { pub: Publication; approvalId?: st
         </div>
         <div className="small muted">{when(pub.created_at)}</div>
         {pub.url ? (
-          <a className="pub-link small" href={pub.url} target="_blank" rel="noreferrer">
+          <ExternalLink className="pub-link small" href={pub.url}>
             <Icon name="link" size={14} /> {pub.url}
-          </a>
+          </ExternalLink>
         ) : null}
         {pub.error ? (
           <div style={{ marginTop: 8 }}>

@@ -1,6 +1,7 @@
 // Pure presentation helpers for the experiment tab. They only arrange what agentd
 // returned (states, verdicts, runs); they never judge a result.
 
+import { AgentdError } from "../../api";
 import type {
   Assumption,
   CandidateVerdict,
@@ -8,6 +9,7 @@ import type {
   Experiment,
   ExperimentState,
   Job,
+  ResearchItem,
   ValidationReport,
   VariantEvaluation,
 } from "../../api";
@@ -145,7 +147,61 @@ export function jobsMissingRuns(jobs: ReadonlyArray<Pick<Job, "id" | "state" | "
   return jobs.filter((j) => j.state === "succeeded" && !j.results?.runs).map((j) => j.id);
 }
 
-/** The paper's experiments, newest first. */
-export function experimentsFor<T extends Pick<Experiment, "research_item_id" | "created_at">>(all: ReadonlyArray<T>, itemId: string): T[] {
-  return all.filter((e) => e.research_item_id === itemId).sort((a, b) => b.created_at - a.created_at);
+// -- a paper's experiments --------------------------------------------------------------
+
+/** The paper's experiments, newest first (same second: the larger id first, so the
+ *  order never flickers between reads). */
+export function experimentsFor<T extends Pick<Experiment, "id" | "research_item_id" | "created_at">>(all: ReadonlyArray<T>, itemId: string): T[] {
+  return all
+    .filter((e) => e.research_item_id === itemId)
+    .sort((a, b) => b.created_at - a.created_at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+}
+
+/** Paper states agentd accepts a propose in: carded, or reported (a new experiment
+ *  for a paper already tested). The paper also needs a scheme in Newton's IR. */
+export function canPropose(item: Pick<ResearchItem, "state" | "data">): boolean {
+  return !!item.data.scheme_ir && (item.state === "carded" || item.state === "reported");
+}
+
+/** The experiment the tab shows: the one picked from the list while it is still there,
+ *  else the latest. `mine` is newest first (experimentsFor). */
+export function shownExperiment<T extends Pick<Experiment, "id">>(mine: ReadonlyArray<T>, picked: string | null): T | undefined {
+  return mine.find((e) => e.id === picked) ?? mine[0];
+}
+
+/** What the propose form shows: the baseline, the initial condition and where it runs. */
+export interface ProposeChoice {
+  baseline: string;
+  initial_condition: string;
+  host_id: string;
+  backend: string;
+}
+
+/** The propose request for what the form shows right now. "Propose anyway" (`retest`)
+ *  sends the current choice too, so a baseline changed after agentd's 409 is the one
+ *  that runs, never the body that was refused. */
+export function proposeBody(choice: ProposeChoice, retest = false): ProposeChoice & { retest?: boolean } {
+  return retest ? { ...choice, retest: true } : { ...choice };
+}
+
+/** Whether the tab's "New experiment" form is open: it was opened for this paper
+ *  (`openFor` is the paper's id) and agentd still takes a propose for it. */
+export function proposeOpen(openFor: string | null, item: Pick<ResearchItem, "id" | "state" | "data">): boolean {
+  return openFor === item.id && canPropose(item);
+}
+
+/** A propose refused by scientific memory (409 `already_tested` / `already_planned`):
+ *  agentd's sentence verbatim and the ids it names. Anything else is an ordinary error. */
+export interface MemoryConflict {
+  code: "already_tested" | "already_planned";
+  message: string;
+  experimentId?: string;
+  researchItemId?: string;
+}
+
+export function memoryConflict(err: unknown): MemoryConflict | null {
+  if (!(err instanceof AgentdError) || err.status !== 409) return null;
+  if (err.code !== "already_tested" && err.code !== "already_planned") return null;
+  const id = (k: string) => (typeof err.body?.[k] === "string" ? (err.body[k] as string) : undefined);
+  return { code: err.code, message: err.message, experimentId: id("experiment_id"), researchItemId: id("research_item_id") };
 }

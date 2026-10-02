@@ -31,6 +31,7 @@ function firstTab(item: ResearchItem): Tab {
 export function PaperWorkspace({ paperId }: { paperId: string }) {
   const paper = usePolling((s) => api.research.item(paperId, s), [paperId], { interval: 4000 });
   const [tab, setTab] = useState<Tab | null>(null);
+  const [proposeFromMethod, setProposeFromMethod] = useState(false);
   const item = paper.data;
 
   if (!item) {
@@ -53,13 +54,28 @@ export function PaperWorkspace({ paperId }: { paperId: string }) {
   return (
     <div className="workspace-scroll">
       <PaperHeader item={item} />
-      <Tabs tabs={TABS} value={current} onChange={setTab} />
+      <Tabs
+        tabs={TABS}
+        value={current}
+        onChange={(t) => {
+          setProposeFromMethod(false);
+          setTab(t);
+        }}
+      />
       {paper.error ? <ErrorNote error={paper.error} /> : null}
       <div className="fade-in" key={current}>
         {current === "summary" ? <SummaryTab item={item} /> : null}
-        {current === "method" ? <MethodTab item={item} onPropose={() => setTab("experiment")} /> : null}
+        {current === "method" ? (
+          <MethodTab
+            item={item}
+            onPropose={() => {
+              setProposeFromMethod(true);
+              setTab("experiment");
+            }}
+          />
+        ) : null}
         {current === "claims" ? <ClaimsTab item={item} /> : null}
-        {current === "experiment" ? <ExperimentTab item={item} /> : null}
+        {current === "experiment" ? <ExperimentTab item={item} startProposing={proposeFromMethod} /> : null}
       </div>
     </div>
   );

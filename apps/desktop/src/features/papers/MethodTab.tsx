@@ -1,7 +1,8 @@
 import type { ResearchItem } from "../../api";
 import { Icon } from "../../components/Icon";
 import { KeyValue } from "../../components/ui";
-import { canPropose, yesNo } from "./format";
+import { canPropose } from "../experiments/view";
+import { yesNo } from "./format";
 import { NoCard } from "./NoCard";
 import { ProvenanceCard } from "./ProvenanceCard";
 import { SchemeMapping } from "./SchemeMapping";

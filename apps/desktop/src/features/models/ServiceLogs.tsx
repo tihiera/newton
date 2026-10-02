@@ -2,6 +2,7 @@
 // since `offset` and the next offset to ask from.
 
 import { useEffect, useRef, useState } from "react";
+import type { LogChunk } from "../../api";
 import { api } from "../../api";
 import { usePolling } from "../../hooks/usePolling";
 import { ErrorNote } from "../../components/ui";
@@ -9,20 +10,23 @@ import { ErrorNote } from "../../components/ui";
 const KEEP = 200_000; // characters kept on screen
 
 export function ServiceLogs({ serviceId }: { serviceId: string }) {
-  const offset = useRef(0);
-  const [text, setText] = useState("");
+  // What is on screen, where the next read starts, and the last chunk taken in. A chunk
+  // is appended once, while rendering, and only if it starts where the text ends.
+  const [log, setLog] = useState<{ offset: number; text: string; seen?: LogChunk }>({ offset: 0, text: "" });
   const box = useRef<HTMLPreElement>(null);
-  const chunk = usePolling(() => api.services.logs(serviceId, offset.current), [serviceId], {
+  const chunk = usePolling(() => api.services.logs(serviceId, log.offset), [serviceId], {
     interval: 2000,
     followEvents: false,
   });
-
-  useEffect(() => {
-    const c = chunk.data;
-    if (!c || c.offset !== offset.current) return;
-    offset.current = c.next_offset;
-    if (c.data) setText((t) => (t + c.data).slice(-KEEP));
-  }, [chunk.data]);
+  const c = chunk.data;
+  if (c && c !== log.seen) {
+    setLog(
+      c.offset === log.offset
+        ? { offset: c.next_offset, text: (log.text + c.data).slice(-KEEP), seen: c }
+        : { ...log, seen: c },
+    );
+  }
+  const text = log.text;
 
   useEffect(() => {
     const el = box.current;
