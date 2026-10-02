@@ -30,7 +30,8 @@ const PATHS: Record<string, string> = {
   info: "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z M12 11v5 M12 8h.01",
   branch: "M6 3v12 M18 9a3 3 0 1 1 0-6 3 3 0 0 1 0 6z M6 21a3 3 0 1 1 0-6 3 3 0 0 1 0 6z M18 9a9 9 0 0 1-9 9",
   more: "M5 12h.01 M12 12h.01 M19 12h.01",
-  refresh: "M20 11a8 8 0 1 0-2.3 5.7 M20 4v7h-7",
+  // Two arrows going round (both directions), not a single one.
+  refresh: "M4 12a8 8 0 0 1 13.66-5.66L20 8.5 M20 4v4.5h-4.5 M20 12a8 8 0 0 1-13.66 5.66L4 15.5 M4 20v-4.5h4.5",
   trash: "M4 7h16 M10 11v6 M14 11v6 M6 7l1 13h10l1-13 M9 7V4h6v3",
   key: "M15 7a4 4 0 1 1-3.5 6L5 19.5V21H3v-3l6.5-6.5A4 4 0 0 1 15 7z M16 8h.01",
   copy: "M9 9h11v11H9z M5 15H4V4h11v1",
