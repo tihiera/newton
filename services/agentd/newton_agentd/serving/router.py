@@ -765,6 +765,8 @@ class Router:
             forwarded["max_tokens"] = min(limit, asked if isinstance(asked, int) else 1024)
         else:
             forwarded = {**payload, "model": e.model}
+            if e.engine != "ollama" and forwarded.get("reasoning_effort") == "none":
+                del forwarded["reasoning_effort"]  # Ollama's "no thinking"; vLLM refuses it
         body = json.dumps(forwarded, ensure_ascii=True).encode()
         request = self.client().build_request(
             "POST", e.base_url + path[len("/v1") :], content=body, headers=up_headers

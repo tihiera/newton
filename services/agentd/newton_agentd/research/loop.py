@@ -399,6 +399,7 @@ class ResearchLoop:
         result = await self.router.complete({
             "model": model, "temperature": 0, "max_tokens": 200,
             "response_format": structured.response_format("triage", structured.TRIAGE),
+            **structured.NO_THINKING,
             "messages": [
                 {"role": "system", "content": TRIAGE % {"goal": goal_text}},
                 {"role": "user", "content": f"Title: {paper['title']}\n\nAbstract: "

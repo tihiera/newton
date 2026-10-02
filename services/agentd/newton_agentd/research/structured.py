@@ -84,6 +84,12 @@ KEYWORDS: dict[str, Any] = {
 }
 
 
+# Reading a paper needs no "thinking" first: a thinking model (qwen3, ...) otherwise spends
+# a short answer's max_tokens on it and answers nothing. Ollama honours this; the router
+# drops it for engines that don't know "none" (vLLM), and MLX never gets it.
+NO_THINKING: dict[str, Any] = {"reasoning_effort": "none"}
+
+
 def response_format(name: str, schema: dict[str, Any]) -> dict[str, Any]:
     """The `response_format` field of a chat completion asking for `schema`."""
     return {"type": "json_schema", "json_schema": {"name": name, "schema": schema, "strict": True}}

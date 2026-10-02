@@ -187,3 +187,30 @@ def test_mlx_models_run_on_this_mac_only(ssh_settings: Any, fake_remote: Any) ->
                                 gpu_support="off")  # fmt: skip
         r = client.post("/services", json={"host_id": host["id"], "name": "m", "settings": MLX})
         assert r.status_code == 409 and "this Mac only" in r.json()["error"]
+
+
+@pytest.mark.parametrize(("engine", "kept"), [("ollama", True), ("vllm", False)])
+def test_no_thinking_reaches_ollama_only(mac: TestClient, engine: str, kept: bool) -> None:
+    """Newton's own reads ask for no thinking (reasoning_effort "none"): Ollama honours
+    it, vLLM refuses that value, so the router drops it there."""
+    import httpx
+
+    svc = create(mac, FAKE).json()
+    ready = wait_for(lambda: mac.get(f"/services/{svc['id']}").json(),
+                     lambda s: (s.get("endpoint") or {}).get("reachable"), timeout=60)  # fmt: skip
+    ctx = mac.app.state.ctx  # type: ignore[attr-defined]
+    real = ctx.router.endpoints
+
+    def as_engine() -> list[Any]:
+        out = real()
+        for e in out:
+            e.engine = engine
+        return out
+
+    ctx.router.endpoints = as_engine
+    r = mac.post("/v1/chat/completions", json={
+        "model": "fake/echo", "messages": [{"role": "user", "content": "x"}],
+        "reasoning_effort": "none"})  # fmt: skip
+    assert r.status_code == 200, r.text
+    seen = httpx.get(f"http://127.0.0.1:{ready['remote_port']}/stats", trust_env=False).json()
+    assert ("reasoning_effort" in seen["last_keys"]) is kept

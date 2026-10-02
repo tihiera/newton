@@ -103,6 +103,7 @@ async def suggest(router: Any, model: str | None, title: str, description: str
             result = await asyncio.wait_for(router.complete({
                 "model": model, "temperature": 0, "max_tokens": 200,
                 "response_format": structured.response_format("keywords", structured.KEYWORDS),
+                **structured.NO_THINKING,
                 "messages": [{"role": "user", "content": PROMPT % {"topic": topic}}],
             }), MODEL_TIMEOUT)  # fmt: skip
             content = ((result["body"].get("choices") or [{}])[0].get("message") or {}).get(

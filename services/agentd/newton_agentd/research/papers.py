@@ -555,6 +555,7 @@ class Papers:
         result = await self.router.complete({
             "model": model, "temperature": 0, "max_tokens": CARD_TOKENS,
             "response_format": structured.response_format("paper_card", structured.CARD),
+            **structured.NO_THINKING,
             "messages": [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": head + body},
