@@ -306,7 +306,10 @@ def scheme_from_card(card: dict[str, Any], slug: str) -> tuple[dict[str, Any] | 
     """Newton's own mapping from the card's choices to a SchemeIR (or why not)."""
     m = card["method"]
     if not card["relevant"]:
-        return None, "the paper is not about a scheme Newton's advection benchmark can run"
+        return None, (
+            "Newton can't test this paper's method: its only test bench runs "
+            "finite-volume schemes on 1D/2D linear advection, and this isn't one"
+        )
     if m["limiter"] == "other" or m["time_integration"] == "other":
         return None, ("its limiter or time integration is outside Newton's IR vocabulary "
                       "(kept as a note: a new IR element would be needed)")  # fmt: skip

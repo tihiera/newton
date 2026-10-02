@@ -61,17 +61,17 @@ OFFLINE = ("arXiv couldn't be reached (offline?): Newton will look again when th
 NO_MODEL = "no model: set default_model in the profile"
 NO_KEYWORDS = "the goal has no keywords to search for: add some so Newton can look for papers"
 READER_DOWN = "the reader model isn't running"  # + why: start it in Models, or choose another
-TRIAGE = """You triage new papers for a research assistant that tests numerical methods on a
-linear advection benchmark (1D/2D, periodic, finite volume). The user's goal:
+# Relevance is to the user's research topic, whatever it is. Whether Newton can then test
+# the paper's method on its benchmark is decided later, from the card (scheme_from_card).
+TRIAGE = """You triage new papers for a researcher. Their research topic:
 
   %(goal)s
 
 Answer with ONE JSON object and nothing else:
 {"relevant": true or false, "why": "one sentence"}
 
-relevant: the paper proposes or analyses a finite-volume / finite-difference scheme (a flux,
-a limiter, a time integrator) for advection or hyperbolic conservation laws that could be
-tried on linear advection, and it serves the goal."""
+relevant: the paper's method, problem or analysis serves this topic (not merely shares a few
+words with it)."""
 
 
 def retry_delay(failures: int) -> float:
