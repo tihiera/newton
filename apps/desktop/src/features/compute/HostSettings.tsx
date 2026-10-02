@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { api, type Host } from "../../api";
 import { useAction } from "../../hooks/useAction";
-import { ErrorNote, Field, fieldError, Spinner } from "../../components/ui";
+import { ErrorNote, Field, fieldError, formError, Spinner } from "../../components/ui";
 
 const GPU_OPTIONS = [
   { value: "auto", label: "Automatic" },
@@ -44,7 +44,7 @@ export function HostSettings({ host, onSaved, onClose }: { host: Host; onSaved: 
           onChange={(e) => setParallel(e.target.value)}
         />
       </Field>
-      {save.error && !Object.keys(save.fields).length ? <ErrorNote error={save.error} /> : null}
+      {formError(save.error, ["gpu_support", "max_parallel_jobs"]) ? <ErrorNote error={save.error} /> : null}
       <div className="row">
         <button
           className="btn primary"

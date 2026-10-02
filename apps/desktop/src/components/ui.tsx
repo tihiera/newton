@@ -92,6 +92,14 @@ export function fieldError(error: unknown, name: string): string | undefined {
   return error instanceof AgentdError ? error.fields[name] : undefined;
 }
 
+/** The error to show under a form: everything a field doesn't already show (a 422 on a
+ *  key no input displays still reaches the user). */
+export function formError(error: Error | undefined, shown: string[]): Error | undefined {
+  if (!error) return undefined;
+  const keys = error instanceof AgentdError ? Object.keys(error.fields) : [];
+  return keys.length === 0 || keys.some((k) => !shown.includes(k)) ? error : undefined;
+}
+
 export function Switch({ on, onChange, disabled, label }: {
   on: boolean;
   onChange: (next: boolean) => void;

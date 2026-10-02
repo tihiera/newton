@@ -8,12 +8,17 @@ type ImageLoader = (src: string) => Promise<Blob>;
 
 function inline(text: string, key: string): ReactNode[] {
   const out: ReactNode[] = [];
-  // `_x_` is emphasis only at word edges: finite_volume_method stays as written.
-  const re = /(`[^`]+`|\*\*[^*]+\*\*|(?<![A-Za-z0-9])_[^_\s][^_]*_(?![A-Za-z0-9])|\[[^\]]+\]\([^)]+\))/g;
+  // `_x_` is emphasis only at word edges: finite_volume_method stays as written. The
+  // left edge is checked by hand (a regex lookbehind fails to parse on macOS 13's WebKit).
+  const re = /(`[^`]+`|\*\*[^*]+\*\*|_[^_\s][^_]*_(?![A-Za-z0-9])|\[[^\]]+\]\([^)]+\))/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
   while ((m = re.exec(text))) {
+    if (m[0].startsWith("_") && m.index > 0 && /[A-Za-z0-9]/.test(text[m.index - 1])) {
+      re.lastIndex = m.index + 1; // inside a word: not emphasis, read on
+      continue;
+    }
     if (m.index > last) out.push(text.slice(last, m.index));
     const tok = m[0];
     const k = `${key}-${i++}`;

@@ -511,9 +511,17 @@ Chrome, screenshots in the session scratchpad):
 - **Polling:** 0 requests while hidden for 15 s, resumes at once when visible; a closed
   drawer stops its polls.
 - **Secrets:** agentd token and router key not in the production bundle, logs or source.
-- vitest 59 pass (2 skipped), tsc clean, `pnpm build`, cargo test 7 pass (1 ignored),
+- vitest 64 pass (2 skipped), tsc clean, `pnpm build`, cargo test 7 pass (1 ignored),
   clippy clean, `scripts/test.sh` 498 pass, 11 skipped.
-- **Not done live:** the Spark from the UI (Tailscale SSH asks for a browser re-auth).
+- **Spark from the UI** (after the Tailscale re-auth): Connect → online, NVIDIA GB10,
+  CUDA · CuPy 14.2, self-test queued; the reader moved to llama3.2:3b on the Spark (16k
+  context, already in Newton's store: no approval); arXiv:1802.04363 carded and mapped,
+  proposed on Spark/CUDA, approved, both variants succeeded on the GB10: yellow, order
+  2.00, L2 1.004e-05, the same numbers as the Mac CPU run of the same scheme.
+- **Review** of the fix commit (3 lenses, each finding verified by a skeptic): 3 confirmed,
+  0 rejected, all fixed with tests: a non-numeric SSH port was sent as null (default
+  port), a 422 on `ssh_user` (from `user@host`) was shown nowhere (same pattern in host
+  settings), and the Markdown regex used a lookbehind that macOS 13's WebKit can't parse.
 
 ## Verification (2026-10-02)
 
@@ -643,6 +651,9 @@ Chrome, screenshots in the session scratchpad):
   once per paper).
 - arXiv links open with a plain `<a target=_blank>`; the Tauri shell may need the opener
   plugin.
+- Proposing by hand skips scientific memory: two papers that map onto the same scheme
+  (`method_digest` equal) both ran (arXiv:1101.4315 and 1802.04363). Only the research
+  loop's auto-propose checks `already_tested`; the propose route should say so too.
 - Failed papers can be read again (agentd retries on a re-ingest); a context that is
   too small for the reader shows only as "not valid JSON".
 

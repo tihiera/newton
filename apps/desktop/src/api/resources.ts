@@ -92,7 +92,7 @@ export function createApi(c: AgentdClient = agentd) {
     hosts: {
       list: (signal?: AbortSignal) => get<Host[]>("/hosts", undefined, signal),
       sshConfig: () => get<SshConfigHost[]>("/ssh/hosts"),
-      create: (body: { name: string; ssh_target: string; ssh_port?: number; gpu_support?: string }) =>
+      create: (body: { name: string; ssh_target: string; ssh_port?: number | string; gpu_support?: string }) =>
         post<Host>("/hosts", body),
       connect: (id: string) => post<ConnectResult>(`/hosts/${id}/connect`),
       hostkeys: (id: string) => get<{ keys?: unknown[]; [k: string]: unknown }>(`/hosts/${id}/hostkeys`),
