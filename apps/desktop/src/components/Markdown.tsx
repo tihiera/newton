@@ -65,6 +65,32 @@ function AuthedImage({ src, alt, load }: { src: string; alt: string; load?: Imag
   return url ? <img src={url} alt={alt} /> : <span className="muted small">[{alt}]</span>;
 }
 
+function CodeBlock({ code, lang }: { code: string; lang: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard refused: the text stays selectable
+    }
+  };
+  return (
+    <div className="md-code">
+      <div className="md-code-head">
+        <span>{lang || "code"}</span>
+        <button type="button" className="btn ghost md-code-copy" onClick={() => void copy()}>
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre>
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
 export function Markdown({ text, loadImage }: { text: string; loadImage?: ImageLoader }) {
   const lines = text.split("\n");
   const blocks: ReactNode[] = [];
@@ -75,6 +101,19 @@ export function Markdown({ text, loadImage }: { text: string; loadImage?: ImageL
     const key = `b${n++}`;
     if (!line.trim()) {
       i++;
+      continue;
+    }
+    // A fenced code block (```lang … ```): kept as written, line by line, with a Copy.
+    const fence = /^\s*(`{3,}|~{3,})\s*([\w+-]*)\s*$/.exec(line);
+    if (fence) {
+      const body: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith(fence[1])) {
+        body.push(lines[i]);
+        i++;
+      }
+      i++; // the closing fence (or the end of the text)
+      blocks.push(<CodeBlock key={key} code={body.join("\n")} lang={fence[2]} />);
       continue;
     }
     const h = /^(#{1,3})\s+(.*)$/.exec(line);
