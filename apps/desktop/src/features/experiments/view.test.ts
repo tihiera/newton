@@ -10,6 +10,7 @@ import {
   headline,
   jobsMissingRuns,
   leadVerdict,
+  plainResult,
   memoryConflict,
   proposeBody,
   proposeOpen,
@@ -212,5 +213,24 @@ describe("proposeOpen", () => {
   it("closes on another paper, or once agentd no longer takes a propose", () => {
     expect(proposeOpen("ri_1", { ...reported, id: "ri_2" })).toBe(false);
     expect(proposeOpen("ri_1", { ...reported, state: "experiment_planned" })).toBe(false);
+  });
+});
+
+describe("plainResult", () => {
+  const variant = (role: string, label: string, order: number, l2: number, failed: string[] = []) => ({
+    role,
+    label,
+    metrics: { observed_order: order, l2_error: l2 },
+    assumptions: failed.map((claim) => ({ claim, holds: false })),
+  });
+  const report = (failed: string[]) =>
+    ({
+      variants: [variant("baseline", "upwind", 0.99, 2.7e-3), variant("candidate", "paper", 2, 1e-5, failed)],
+      verdicts: [],
+    }) as unknown as ValidationReport;
+
+  it("says each failed claim once", () => {
+    expect(plainResult(report(["tvd"]))).toBe("Order 2 vs 0.99, error 270× lower than upwind; TVD claim did not hold.");
+    expect(plainResult(report(["tvd", "max_cfl"]))).toContain("TVD, Max CFL claims did not hold");
   });
 });

@@ -256,6 +256,9 @@ export function plainResult(report: ValidationReport, verdict?: CandidateVerdict
   }
   const failed = (cand?.assumptions ?? []).filter((a) => a.holds === false).map((a) => claimLabel(a.claim));
   let line = parts.length ? `${parts.join(", ")} than ${base?.label ?? "the baseline"}` : "";
-  if (failed.length) line += `${line ? "; " : ""}${failed.join(", ")} claim did not hold`;
+  // Labels such as "TVD claim" already say "claim": one word, not "TVD claim claim".
+  const names = failed.map((f) => f.replace(/ claim$/, ""));
+  const which = names.length === 1 ? `${names[0]} claim did not hold` : `${names.join(", ")} claims did not hold`;
+  if (failed.length) line += `${line ? "; " : ""}${which}`;
   return line ? line.charAt(0).toUpperCase() + line.slice(1) + "." : "";
 }
